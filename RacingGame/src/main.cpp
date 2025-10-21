@@ -38,11 +38,15 @@ float lastFrame = 0.0f;
 
 glm::vec3 pos(0.0f, 0.0f, 0.0f);
 float rot = 0.0f;
+float rotLeft = 0.0f;
+float rotRight = 0.0f;
 float setAngle = 0.0f;
+float dirRot = 0.0f;
 float currentAngle = 0.0f + 90;
 float acceleration = 0.0f;
 float velocity = 0.0f;
-float driftAngle = 0.0f;
+float driftAngle = 60.0f;
+float traction = 0.0f;
 glm::vec3 currentVel(0.0f, 0.0f, 0.0f);
 glm::vec3 lastVel(0.0f, 0.0f, 0.0f);
 glm::vec3 lastPos(0.0f, 0.0f, 0.0f);
@@ -157,30 +161,44 @@ void processInput(float dt)
 		activeCam += (activeCam == 0) ? 1 : -1;
 	}
 
-	if (Keyboard::key(GLFW_KEY_W)) {
-		acceleration = 1500.0f;
+	if (Keyboard::key(GLFW_KEY_W) && !Keyboard::key(GLFW_KEY_SPACE)) {
+		acceleration = 2700.0f;
 	}
 	else if (Keyboard::key(GLFW_KEY_S)) {
-		acceleration = -200.0f;
+		acceleration = -400.0f;
 	} else {
 		acceleration = 0.0f;
 	}
 	velocity += acceleration * dt;
 	velocity -= velocity * dt; // friction / coasting
-	if (Keyboard::key(GLFW_KEY_D) && glm::abs(velocity) > 1.0f) {
-		rot -= glm::sign(velocity) * 100.0f * dt;
+	//printf("Velocity: %.2f\n", velocity);
+	float turnRate = 100.0f;
+	float calcRot = glm::sign(velocity) * turnRate * dt;
+	float oversteerAngle = 0.0f; 
+	if (velocity > 1000.0f && (((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_D))) || ((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_A))))) {
+		oversteerAngle = glm::mix(0.0f, driftAngle, 1.1 * dt);
+		printf("%f\n", oversteerAngle);
+		velocity -= 40.0f * dt;
 	}
-	if (Keyboard::key(GLFW_KEY_A) && glm::abs(velocity) > 1.0f) {
-		rot += glm::sign(velocity) * 100.0f * dt;
+	else {
+		dirRot = glm::mix(dirRot, rot, 1.5 * dt);
 	}
-	if (Keyboard::key(GLFW_KEY_SPACE)) {
-		velocity -= 1000.0f * dt;
+	if (Keyboard::key(GLFW_KEY_D) && glm::abs(velocity) > 100.0f) {
+		rot -= calcRot + oversteerAngle;
+		dirRot -= calcRot;
+	}
+	if (Keyboard::key(GLFW_KEY_A) && glm::abs(velocity) > 100.0f) {
+		rot += calcRot + oversteerAngle;
+		dirRot += calcRot;
+	}
+	if (Keyboard::key(GLFW_KEY_SPACE) && !((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_D))) || !((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_A)))) {
+		velocity -= 300.0f * dt;
 		if (velocity < 0.0f) velocity = 0.0f;
 	}
-
 	glm::vec3 forward = glm::vec3(glm::sin(glm::radians(currentAngle)), glm::cos(glm::radians(currentAngle)), 0.0f);
+	forward = glm::normalize(forward);
 	pos += forward * velocity * dt;
-	currentAngle = -rot;
+	currentAngle = -dirRot;
 
 	double dx = Mouse::getDX(), dy = Mouse::getDY();
 	if (dx != 0 || dy != 0) {
