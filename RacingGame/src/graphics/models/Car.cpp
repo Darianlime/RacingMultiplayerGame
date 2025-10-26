@@ -18,7 +18,7 @@ Car::~Car() {
 }
 
 glm::vec3 Car::getForwardDirection() {
-	return glm::vec3(glm::sin(glm::radians(-90 + currentAngle)), glm::cos(glm::radians(-90 + currentAngle)), 0.0f);
+	return glm::vec3(glm::sin(glm::radians(currentAngle - 90.0f)), glm::cos(glm::radians(currentAngle - 90.0f)), 0.0f);
 }
 
 void Car::render(Shader shader) {

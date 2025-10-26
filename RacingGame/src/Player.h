@@ -12,12 +12,12 @@ class Player {
 private:
 	int id = 0;
 	// car model
-	Car car;
+	Car& car;
 
 public:
-	Player(Car car, int id);
+	Player(Car& car, int id);
 	int getId() { return id; }
-	Car getCar() { return car; }
+	Car& getCar() { return car; }
 	void setId(int newId) { id = newId; }
 	void render(Shader shader) { car.render(shader); }
 	void Update(float dt);

@@ -75,8 +75,8 @@ int main() {
 	// SHADERS============================================================
 	Shader shader("assets/object.vert", "assets/object.frag");
 
-	//Car car(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, { "assets/car1_2.png" });
-	Player player1(Car(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, "assets/car1_2.png"), 0);
+	Car car1(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, { "assets/car1_2.png" });
+	Player player1(car1, 0);
 	//Player player2(Car(glm::vec3(0.0f, 1000.0f, 0.0f), -500.0f, 2700.0f,  "assets/car1_2.png") , 1);
 
 	Quad wall(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" });
@@ -99,7 +99,7 @@ int main() {
 		
 		processInput(deltaTime);
 		
-		if (activePlayer) {
+		if (activePlayer == 0) {
 			player1.Update(deltaTime);
 		}
 		else {
@@ -107,7 +107,7 @@ int main() {
 		}
 
 		bool collision = Collision2D::checkOBBCollision(player1.getCar().getTransform(), wall);
-		std::cout << "Collision: " << (collision ? "Yes" : "No") << std::endl;
+		//std::cout << "Collision: " << (collision ? "Yes" : "No") << std::endl;
 		screen.update();
 
 		shader.activate();
