@@ -85,7 +85,12 @@ GLuint Shader::compileShader(const char* filePath, GLuint type) {
 // uniform functions
 
 void Shader::setMat4(const std::string& name, glm::mat4 val) {
-	glUniformMatrix4fv(glGetUniformLocation(id, name.c_str()), 1, GL_FALSE, glm::value_ptr(val));
+	GLint loc = glGetUniformLocation(id, name.c_str());
+	if (loc == -1) {
+		std::cerr << "Warning: uniform '" << name << "' not found or unused in shader.\n";
+		return;
+	}
+	glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(val));
 }
 
 void Shader::setBool(const std::string& name, bool value) {

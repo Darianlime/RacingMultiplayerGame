@@ -1,6 +1,8 @@
 #include "Texture.h"
 
 #include <iostream>
+#include <fstream>
+
 
 int Texture::currentId = 0;
 
@@ -22,8 +24,17 @@ void Texture::generate() {
 
 void Texture::load(bool flip) {
 	stbi_set_flip_vertically_on_load(flip);
-	// load without forcing number of channels so nChannels reflects the file
+
 	unsigned char* data = stbi_load(path, &width, &height, &nChannels, 0);
+	
+	if (!data) {
+		std::cerr << "Failed to load texture: " << path
+			<< "\nReason: " << stbi_failure_reason() << std::endl;
+		return;
+	}
+	else {
+		std::cerr << "loaded texture: " << path << std::endl;
+	}
 	GLenum colorMode = GL_RGB;
 	if (nChannels == 1) {
 		colorMode = GL_RED;

@@ -154,6 +154,8 @@
     <ClCompile Include="src\io\Mouse.cpp" />
     <ClCompile Include="src\io\Screen.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Physics\Collision2D.cpp" />
+    <ClCompile Include="src\Player.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\graphics\Mesh.h" />
@@ -167,6 +169,8 @@
     <ClInclude Include="src\io\Keyboard.h" />
     <ClInclude Include="src\io\Mouse.h" />
     <ClInclude Include="src\io\Screen.h" />
+    <ClInclude Include="src\Physics\Collision2D.h" />
+    <ClInclude Include="src\Player.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\object.frag" />

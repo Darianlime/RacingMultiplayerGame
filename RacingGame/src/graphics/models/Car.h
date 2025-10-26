@@ -1,8 +1,6 @@
 #ifndef CAR_H
 #define CAR_H
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -15,17 +13,25 @@ private:
 	Quad transform;
 
 	// car properties
-	glm::vec3 direction;
-	float acceleration;
-	float velocity;
+	// GEARING SPEEDS (UNUSED) MAKE LATER
+	float minSpeed;
+	float maxSpeed;
 	float turnRate;
-	float currentAngle;
-
+	float traction;
 public:
-	Car(Quad quad);
+	float forwardRot;
+	float velocity;
+	float acceleration;
+	float currentAngle;
+	float driftAngle;
+
+	Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageName);
+	~Car();
 
 	Quad& getTransform() { return transform; }
+	glm::vec3 getForwardDirection();
 	void setPosition(glm::vec3 pos) { transform.pos = pos; }
+	void setScale(glm::vec3 scale) { transform.size = scale;  }
 	void setRotation(float rot) { transform.rot = rot; }
 	void render(Shader shader);
 };

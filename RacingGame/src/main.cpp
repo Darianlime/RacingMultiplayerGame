@@ -7,6 +7,7 @@
 #include <sstream>
 #include <streambuf>
 #include <string>
+#include <memory>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -14,12 +15,16 @@
 #include "graphics/Shader.h"
 //#include "graphics/Texture.h"
 #include "graphics/models/Quad.hpp"
+#include "graphics/models/Car.h"
+#include "Player.h"
 
 #include "io/Joystick.h"
 #include "io/Keyboard.h"
 #include "io/Mouse.h"
 #include "io/Camera.h"
 #include "io/Screen.h"
+
+#include "Physics/Collision2D.h"
 
 void processInput(float dt);
 
@@ -32,24 +37,10 @@ Camera cameras[2] = {
 	Camera(glm::vec3(10.0f, 10.0f, 0.0f))
 };
 int activeCam = 0;
+int activePlayer = 0;
 
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
-
-glm::vec3 pos(0.0f, 0.0f, 0.0f);
-float rot = 0.0f;
-float rotLeft = 0.0f;
-float rotRight = 0.0f;
-float setAngle = 0.0f;
-float dirRot = 0.0f;
-float currentAngle = 0.0f + 90;
-float acceleration = 0.0f;
-float velocity = 0.0f;
-float driftAngle = 60.0f;
-float traction = 0.0f;
-glm::vec3 currentVel(0.0f, 0.0f, 0.0f);
-glm::vec3 lastVel(0.0f, 0.0f, 0.0f);
-glm::vec3 lastPos(0.0f, 0.0f, 0.0f);
 
 int main() {
 	int success;
@@ -78,16 +69,18 @@ int main() {
 
 	screen.setParameters();
 
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
+	//glEnable(GL_DEPTH_TEST);
+	//glDepthFunc(GL_LESS);
 
 	// SHADERS============================================================
 	Shader shader("assets/object.vert", "assets/object.frag");
 
-	Quad car(pos, glm::vec3(1.0f, 1.0f, 1.0f), -90.0f + rot, {"assets/car1_2.png"});
-	car.init();
-	//Cube cube(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.75f));
-	//cube.init();
+	//Car car(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, { "assets/car1_2.png" });
+	Player player1(Car(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, "assets/car1_2.png"), 0);
+	//Player player2(Car(glm::vec3(0.0f, 1000.0f, 0.0f), -500.0f, 2700.0f,  "assets/car1_2.png") , 1);
+
+	Quad wall(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" });
+	wall.init();
 
 	mainJ.update();
 	if (mainJ.isPresent()) {
@@ -103,8 +96,18 @@ int main() {
 		deltaTime = currentTime - lastFrame;
 		lastFrame = currentTime;
 
+		
 		processInput(deltaTime);
+		
+		if (activePlayer) {
+			player1.Update(deltaTime);
+		}
+		else {
+			//player2.Update(deltaTime);
+		}
 
+		bool collision = Collision2D::checkOBBCollision(player1.getCar().getTransform(), wall);
+		std::cout << "Collision: " << (collision ? "Yes" : "No") << std::endl;
 		screen.update();
 
 		shader.activate();
@@ -124,11 +127,11 @@ int main() {
 		shader.setMat4("projection", projection);*/
 		shader.setMat4("view", view);
 		shader.setMat4("projection", projection);
-		//cube.render(shader);
-		car.pos = pos;
-		car.rot = -90.0f + rot;
-		car.render(shader);
 
+		wall.render(shader);
+		player1.render(shader);
+		//player2.render(shader);
+		//wall.render(shader);
 		screen.newFrame();
 	}
 
@@ -159,46 +162,8 @@ void processInput(float dt)
 
 	if (Keyboard::keyWentDown(GLFW_KEY_TAB)) {
 		activeCam += (activeCam == 0) ? 1 : -1;
+		activePlayer += (activePlayer == 0) ? 1 : -1;
 	}
-
-	if (Keyboard::key(GLFW_KEY_W) && !Keyboard::key(GLFW_KEY_SPACE)) {
-		acceleration = 2700.0f;
-	}
-	else if (Keyboard::key(GLFW_KEY_S)) {
-		acceleration = -400.0f;
-	} else {
-		acceleration = 0.0f;
-	}
-	velocity += acceleration * dt;
-	velocity -= velocity * dt; // friction / coasting
-	//printf("Velocity: %.2f\n", velocity);
-	float turnRate = 100.0f;
-	float calcRot = glm::sign(velocity) * turnRate * dt;
-	float oversteerAngle = 0.0f; 
-	if (velocity > 1000.0f && (((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_D))) || ((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_A))))) {
-		oversteerAngle = glm::mix(0.0f, driftAngle, 1.1 * dt);
-		printf("%f\n", oversteerAngle);
-		velocity -= 40.0f * dt;
-	}
-	else {
-		dirRot = glm::mix(dirRot, rot, 1.5 * dt);
-	}
-	if (Keyboard::key(GLFW_KEY_D) && glm::abs(velocity) > 100.0f) {
-		rot -= calcRot + oversteerAngle;
-		dirRot -= calcRot;
-	}
-	if (Keyboard::key(GLFW_KEY_A) && glm::abs(velocity) > 100.0f) {
-		rot += calcRot + oversteerAngle;
-		dirRot += calcRot;
-	}
-	if (Keyboard::key(GLFW_KEY_SPACE) && !((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_D))) || !((Keyboard::key(GLFW_KEY_SPACE) && Keyboard::key(GLFW_KEY_A)))) {
-		velocity -= 300.0f * dt;
-		if (velocity < 0.0f) velocity = 0.0f;
-	}
-	glm::vec3 forward = glm::vec3(glm::sin(glm::radians(currentAngle)), glm::cos(glm::radians(currentAngle)), 0.0f);
-	forward = glm::normalize(forward);
-	pos += forward * velocity * dt;
-	currentAngle = -dirRot;
 
 	double dx = Mouse::getDX(), dy = Mouse::getDY();
 	if (dx != 0 || dy != 0) {
