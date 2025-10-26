@@ -3,6 +3,11 @@
 
 #include "../Model.h"
 
+enum PhysicsType {
+    STATIC,
+    DYNAMIC
+};
+
 class Quad : public Model {
 private:
     float vertices[32] = {
@@ -19,14 +24,17 @@ public:
     std::vector<const char*> textureImageNames;
     std::vector<Texture> textures;
 	std::vector<glm::vec3> worldVerts; // for collision detection
+	PhysicsType physicsType;
 
     // Default constructor
-    Quad() : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames() {}
+    Quad() : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(STATIC) {}
 
-    Quad(std::vector<const char*> textureImageNames) : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames) {}
+    Quad(PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(type) {}
 
-    Quad(glm::vec3 pos, glm::vec3 size, float rot, std::vector<const char*> textureImageNames)
-        : pos(pos), size(size), rot(rot), textureImageNames(textureImageNames) {
+    Quad(std::vector<const char*> textureImageNames, PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames) , physicsType(type) {}
+
+    Quad(glm::vec3 pos, glm::vec3 size, float rot, std::vector<const char*> textureImageNames, PhysicsType type)
+        : pos(pos), size(size), rot(rot), textureImageNames(textureImageNames) , physicsType(type) {
     }
 
     void init() {

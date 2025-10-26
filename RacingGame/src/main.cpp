@@ -77,9 +77,10 @@ int main() {
 
 	Car car1(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, { "assets/car1_2.png" });
 	Player player1(car1, 0);
-	//Player player2(Car(glm::vec3(0.0f, 1000.0f, 0.0f), -500.0f, 2700.0f,  "assets/car1_2.png") , 1);
+	Car car2(glm::vec3(0.0f, 1000.0f, 0.0f), -500.0f, 2700.0f, "assets/car1_2.png");
+	Player player2(car2, 1);
 
-	Quad wall(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" });
+	Quad wall(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" }, STATIC);
 	wall.init();
 
 	mainJ.update();
@@ -95,19 +96,28 @@ int main() {
 		float currentTime = glfwGetTime();
 		deltaTime = currentTime - lastFrame;
 		lastFrame = currentTime;
-
+		if (deltaTime > 0.033f)
+			deltaTime = 0.033f;
 		
 		processInput(deltaTime);
 		
 		if (activePlayer == 0) {
-			player1.Update(deltaTime);
+			player1.PhysicsUpdate(deltaTime);
 		}
 		else {
-			//player2.Update(deltaTime);
+			player2.PhysicsUpdate(deltaTime);
 		}
 
-		bool collision = Collision2D::checkOBBCollision(player1.getCar().getTransform(), wall);
-		//std::cout << "Collision: " << (collision ? "Yes" : "No") << std::endl;
+		bool collision1 = Collision2D::checkOBBCollisionResolve(player1.getCar().getTransform(), player2.getCar().getTransform());
+		bool collision2 = Collision2D::checkOBBCollisionResolve(player1.getCar().getTransform(), wall);
+		bool collision3 = Collision2D::checkOBBCollisionResolve(player2.getCar().getTransform(), wall);
+
+		if (collision2) {
+			std::cout << "Player 1 collided with wall!" << std::endl;
+			player1.getCar().velocity -= 3000.0f * deltaTime;
+		}
+
+		std::cout << "Collision: " << (collision2 ? "Yes" : "No") << std::endl;
 		screen.update();
 
 		shader.activate();
@@ -130,7 +140,7 @@ int main() {
 
 		wall.render(shader);
 		player1.render(shader);
-		//player2.render(shader);
+		player2.render(shader);
 		//wall.render(shader);
 		screen.newFrame();
 	}

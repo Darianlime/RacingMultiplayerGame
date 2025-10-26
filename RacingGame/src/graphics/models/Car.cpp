@@ -1,7 +1,7 @@
 #include "Car.h"
 
 Car::Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageName) : minSpeed(minSpeed), maxSpeed(maxSpeed) {
-	transform = Quad({ imageName });
+	transform = Quad({ imageName }, DYNAMIC);
 	transform.init();
 	transform.rot = 0.0f;
 	transform.pos = position;
@@ -18,7 +18,8 @@ Car::~Car() {
 }
 
 glm::vec3 Car::getForwardDirection() {
-	return glm::vec3(glm::sin(glm::radians(currentAngle - 90.0f)), glm::cos(glm::radians(currentAngle - 90.0f)), 0.0f);
+	float angleRad = glm::radians(currentAngle - 90.0f);
+	return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
 }
 
 void Car::render(Shader shader) {

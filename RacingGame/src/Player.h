@@ -20,7 +20,7 @@ public:
 	Car& getCar() { return car; }
 	void setId(int newId) { id = newId; }
 	void render(Shader shader) { car.render(shader); }
-	void Update(float dt);
+	void PhysicsUpdate(float dt);
 };
 
 #endif // !CAR_H
