@@ -1,6 +1,6 @@
-#include "Screen.h"
-#include "Keyboard.h"
-#include "Mouse.h"
+#include "io/Screen.h"
+#include "io/Keyboard.h"
+#include "io/Mouse.h"
 
 unsigned int Screen::SCR_WIDTH = 800;
 unsigned int Screen::SCR_HEIGHT = 600;
@@ -27,7 +27,7 @@ bool Screen::init() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+	window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Racing Game", NULL, NULL);
 	if (!window)
 	{
 		return false;
@@ -36,7 +36,7 @@ bool Screen::init() {
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		glfwTerminate();
-		return -1;
+		return false;
 	}
 	setParameters();
 	return true;
