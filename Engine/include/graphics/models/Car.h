@@ -25,7 +25,8 @@ public:
 	float currentAngle;
 	float driftAngle;
 
-	Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageName);
+	Car();
+	Car(glm::vec3 position, const char* imageName);
 	~Car();
 
 	Quad& getTransform() { return transform; }

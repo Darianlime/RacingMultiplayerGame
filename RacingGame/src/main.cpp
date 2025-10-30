@@ -60,7 +60,7 @@ int main() {
 	// SHADERS============================================================
 	Shader shader("assets/object.vert", "assets/object.frag");
 
-	Car car1(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f, { "assets/car1_2.png" });
+	Car car1(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f,  "assets/car1_2.png");
 	Player player1(car1, 0);
 	Car car2(glm::vec3(0.0f, 1000.0f, 0.0f), -500.0f, 2700.0f, "assets/car1_2.png");
 	Player player2(car2, 1);

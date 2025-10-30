@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="src\Camera.cpp" />
     <ClCompile Include="src\Car.cpp" />
+    <ClCompile Include="src\CarRenderer.cpp" />
     <ClCompile Include="src\Collision2D.cpp" />
     <ClCompile Include="src\glad.c" />
     <ClCompile Include="src\Joystick.cpp" />
@@ -41,6 +42,7 @@
     <ClInclude Include="include\graphics\Mesh.h" />
     <ClInclude Include="include\graphics\Model.h" />
     <ClInclude Include="include\graphics\models\Car.h" />
+    <ClInclude Include="include\graphics\models\CarRenderer.h" />
     <ClInclude Include="include\graphics\models\Quad.hpp" />
     <ClInclude Include="include\graphics\Shader.h" />
     <ClInclude Include="include\graphics\Texture.h" />
@@ -153,6 +155,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)\include;</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -172,6 +175,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)\include;</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>

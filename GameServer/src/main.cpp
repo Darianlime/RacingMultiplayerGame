@@ -4,14 +4,61 @@
 #include <cstring>
 #include <map>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <ctime>
+#include <ratio>
+#include <chrono>
+#include <thread>
+
+using namespace std::chrono;
+using namespace std::this_thread;
+
+struct Inputs {
+	bool W = false;
+	bool S = false;
+	bool A = false;
+	bool D = false;
+	bool Space = false;
+};
+
+struct Car {
+	glm::vec3 pos;
+	glm::vec3 size;
+	float rot;
+
+	float velocity;
+	float accel;
+	float minSpeed;
+	float maxSpeed;
+	float currentAngle;
+	float forwardRot;
+	Car() : 
+		pos(0.0f), size(1.0f), rot(0.0f), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(0.0f), forwardRot(0.0f) {}
+
+	glm::vec3 getForwardDirection() {
+		float angleRad = glm::radians(currentAngle - 90.0f);
+		return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
+	}
+};
+
 class ClientData {
 private:
 	int m_id;
 	std::string username;
+
+	std::unique_ptr<Car> car;
+	Inputs inputState;
 public:
+
 	ClientData(int id) : m_id(id) {}
 
-	void SetUsername(const char* name) { username = name; }
+	void SetUsername(std::string name) { username = name; }
+	void CreateCar() { car = std::make_unique<Car>(); }
+
+	Car* GetCar() const { return car.get(); }
+	Inputs& GetInputState() { return inputState; }
 
 	int GetID() const { return m_id; }
 	const std::string& GetUsername() const { return username; }
@@ -30,7 +77,7 @@ void SendPacket(ENetPeer* peer, const char* data) {
 	enet_peer_send(peer, 0, packet); // send packet on channel 0
 }
 
-void ParseData(ENetHost* server, int id, char* data) {
+void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 
 	int data_type;
 	sscanf_s(data, "%d|", &data_type);
@@ -49,7 +96,7 @@ void ParseData(ENetHost* server, int id, char* data) {
 	case 2:
 	{
 		char username[80];
-		sscanf_s(data, "2|%79[^\n]|", &username, (unsigned)80);
+		sscanf_s(data, "2|%79[^\n]", &username, (unsigned)80);
 
 		char send_data[1024] = { '\0' };
 		sprintf_s(send_data, sizeof(send_data), "2|%d|%s", id, username);
@@ -59,6 +106,54 @@ void ParseData(ENetHost* server, int id, char* data) {
 		client_map[id]->SetUsername(username);
 		break;
 	}
+	case 3: // process input update physics
+	{
+		unsigned int input = 0;
+		sscanf_s(data, "3|%u", &input);
+		//std::cout << "Input Sent by " << input << peer->address.host << peer->address.port << std::endl;
+		Inputs& inputState = client_map[id]->GetInputState();
+		inputState.W = (input & (1 << 0));
+		inputState.S = (input & (1 << 1)) >> 1;
+		inputState.A = (input & (1 << 2)) >> 2;
+		inputState.D = (input & (1 << 3)) >> 3;
+		inputState.Space = (input & (1 << 4)) >> 4;
+		//std::cout << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
+		break;
+	}
+	}
+}
+
+void PhysicsUpdate(double fixedDeltaTime) {
+	for (auto& [id, client] : client_map) {
+		Car* car = client->GetCar();
+		Inputs& inputState = client_map[id]->GetInputState();
+		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
+		if (inputState.W) {
+			car->accel = car->maxSpeed;
+		}
+		else if (inputState.S) {
+			car->accel = car->minSpeed;
+		}
+		else {
+			car->accel = 0.0;
+		}
+		car->velocity += car->accel * fixedDeltaTime;
+		float drag = 500.0f + 0.3f * glm::abs(car->velocity);
+		if (car->velocity > 0.0f)
+			car->velocity -= drag * fixedDeltaTime;
+		else if (car->velocity < 0.0f)
+			car->velocity += drag * fixedDeltaTime;
+		car->velocity = glm::clamp(car->velocity, car->minSpeed, car->maxSpeed);
+		printf("Velocity: %.2f\n", client_map[id]->GetCar()->velocity);
+		glm::vec3 forward = car->getForwardDirection();
+		forward = glm::normalize(forward);
+		car->pos += forward * (car->velocity * (float)fixedDeltaTime);
+		printf("x: %.2f, y: %.2f\n", client_map[id]->GetCar()->pos.x, client_map[id]->GetCar()->pos.y);
+		car->currentAngle = -car->forwardRot;
+
+		//zero out inputs
+		memset(&inputState, 0, sizeof(struct Inputs));
+		//std::cout << "end " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 	}
 }
 
@@ -83,18 +178,27 @@ int main(int argc, char** argv) {
 	}
 	std::cout << "Server started on port " << address.port << std::endl;
 
+	const double fixedHertz = 1.0 / 60.0; // 60 ticks per sec 
+	steady_clock::time_point lastTime = high_resolution_clock::now();
+	double atHertz = 0.0;
+
 	// GAME LOOP START
 	int new_client_id = 0;
 	while (true) {
+		steady_clock::time_point currentTime = high_resolution_clock::now();
+		double deltaTime = duration_cast<duration<double>>(currentTime - lastTime).count();
+		lastTime = high_resolution_clock::now();
+		atHertz += deltaTime;
 		// wait up to 1000 milliseconds for an event
-		while (enet_host_service(server, &event, 1000) > 0) {
+		while (enet_host_service(server, &event, 0) > 0) {
 			switch (event.type) {
 			case ENET_EVENT_TYPE_CONNECT:
 			{
-				std::cout << "A new client connected from "
-					<< event.peer->address.host << ":" << event.peer->address.port << "." << std::endl;
-				event.peer->data = (void*)"Client information"; // store some data about the peer
+				//std::cout << "A new client connected from "
+				//	<< event.peer->address.host << ":" << event.peer->address.port << "." << std::endl;
+				//event.peer->data = (void*)"Client information"; // store some data about the peer
 
+				// REMOVE MAYBE OTHER CLIENTS DO NOT NEED TO KNOW ABOUT A CLIENT
 				for (auto const& pair : client_map) {
 					char send_data[1024] = { '\0' };
 					sprintf_s(send_data, sizeof(send_data), "2|%d|%s", pair.first, pair.second->GetUsername().c_str());
@@ -103,26 +207,36 @@ int main(int argc, char** argv) {
 					BroadcastPacket(server, send_data);
 				}
 
+				// new client 
 				new_client_id++;
 				client_map[new_client_id] = new ClientData(new_client_id);
+				client_map[new_client_id]->CreateCar();
 				event.peer->data = client_map[new_client_id]; // store client ID as peer data
 
+				// 3 new id
 				char data_to_send[126] = { '\0' };
 				sprintf_s(data_to_send, sizeof(data_to_send), "3|%d", new_client_id);
 				SendPacket(event.peer, data_to_send);
+
+				// 4 new car data 
+				/*glm::vec3 car_data_pos = client_map[new_client_id]->GetCar()->pos;
+				float car_data_rot = client_map[new_client_id]->GetCar()->rot;*/
+ 
+				/*char send_car_data[126] = {'\0'};
+				sprintf_s(data_to_send, sizeof(data_to_send), "4|%d|%f|%f|%f|%f", new_client_id, car_data_pos.x, car_data_pos.y, car_data_pos.z, car_data_rot);
+				SendPacket(event.peer, data_to_send);*/
 
 				break;
 			}
 			case ENET_EVENT_TYPE_RECEIVE:
 			{
-				std::cout << "A packet of length " << event.packet->dataLength << " was received from "
-					<< (char*)event.packet->data << " with peer address " << event.peer->address.host << " and port " << event.peer->address.port
-					<< " on channel " << (int)event.channelID << "." << std::endl;
+				//std::cout << "A packet of length " << event.packet->dataLength << " was received from "
+				//	<< (char*)event.packet->data << " with peer address " << event.peer->address.host << " and port " << event.peer->address.port
+				//	<< " on channel " << (int)event.channelID << "." << std::endl;
 
-				ParseData(server, static_cast<ClientData*>(event.peer->data)->GetID(), (char*)event.packet->data);
+				ParseData(server, event.peer ,static_cast<ClientData*>(event.peer->data)->GetID(), (char*)event.packet->data);
 				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
-				// echo the packet back to the client
-				//enet_peer_send(event.peer, 0, event.packet);
+		
 				break;
 			}
 			case ENET_EVENT_TYPE_DISCONNECT:
@@ -138,6 +252,20 @@ int main(int argc, char** argv) {
 			}
 			}
 		}
+
+		// receive input pack
+
+
+		// physics update
+		while (atHertz >= fixedHertz) {
+			PhysicsUpdate(fixedHertz);
+			atHertz -= fixedHertz;
+		}
+
+		// send packet
+
+
+		sleep_for(std::chrono::milliseconds(1));
 	}
 	// GAME LOOP END
 	enet_host_destroy(server); // destroy the server host
