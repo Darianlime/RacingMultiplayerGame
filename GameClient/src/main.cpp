@@ -6,6 +6,7 @@
 #include <cstring>
 #include <thread>
 #include <map>
+#include <queue>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -23,6 +24,16 @@
 static Screen screen(1270, 720);
 static Joystick mainJ(0);
 static int CLIENT_ID = -1; // unique client ID assigned by server
+
+struct CarPacket {
+	int parseType;
+	int id;
+	glm::vec3 pos;
+	float rot;
+	char assetImage[80];
+};
+
+static std::queue<CarPacket> createNewCars;
 
 class ClientData {
 private:
@@ -50,29 +61,24 @@ void SendPacket(ENetPeer* peer, const char* data) {
 	enet_peer_send(peer, 0, packet); // send packet on channel 0
 }
 
+void SendPacket(ENetPeer* peer, CarPacket data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_peer_send(peer, 0, packet); // send packet on channel 0
+}
+
+// Parsing new clients 
 void ParseData(char* data) {
 	int data_type;
 	int id;
 	sscanf_s(data, "%d|%d", &data_type, &id);
 
 	switch (data_type) {
-	case 1: // chat message
+	case 2: // another client joined
 	{
-		if (id != CLIENT_ID) {
-			char msg[80];
-			sscanf_s(data, "%*d|%*d|%79[^|]", &msg, (unsigned)80);
-			//if (client_map.find(id) != client_map.end()) {
-			//chatScreen.PostMessageW(client_map[id]->GetUsername().c_str(), msg);
-			//}
-		}
-		break;
-	}
-	case 2: // user joined
-	{
-		if (id != CLIENT_ID) {
+		if (client_map.find(id) == client_map.end()) {
 			std::cout << "id assigned?" << id << std::endl;
-			char username[80];
-			sscanf_s(data, "%*d|%*d|%79[^|]", &username, (unsigned)80);
+			char username[80] = { '\0' };
+			sscanf_s(data, "%*d|%*d|%79[^|]", username, (unsigned)sizeof(username));
 			client_map[id] = new ClientData(id);
 			client_map[id]->SetUsername(username);
 		}
@@ -85,11 +91,38 @@ void ParseData(char* data) {
 		client_map[id] = new ClientData(id);
 		break;
 	}
-	case 4: // update player render
+	}
+}
+
+// Parsing Players State
+void ParseCarData(CarPacket* data) {
+	// update player render state
+	switch (data->parseType) {
+	case 1: // update car data
 	{
+		CarRenderer* car = client_map[data->id]->GetCar();
+		if (car != nullptr) {
+			car->getTransform().pos = data->pos;
+			car->getTransform().rot = data->rot;
+		}
+		break;
+	}
+	case 2: // create a car render for other clients
+	{ 
+		if (data->id != CLIENT_ID) {
+			printf("creating car: %d, null?: %d", data->id, client_map[data->id] == nullptr);
+			createNewCars.push(*data);
+		}
+		break;
+	} 
+	case 3: // create a car for this client
+	{
+		printf("%s", data->assetImage);
+		createNewCars.push(*data);
 		break;
 	}
 	}
+	
 }
 
 void* MsgLoop(ENetHost* client) {
@@ -98,9 +131,13 @@ void* MsgLoop(ENetHost* client) {
 		while (enet_host_service(client, &event, 10) > 0) {
 			switch (event.type) {
 			case ENET_EVENT_TYPE_RECEIVE:
-				//printf("Message from server: %s\n", event.packet->data);
-
-				ParseData((char*)event.packet->data);
+				if (event.packet->dataLength == sizeof(CarPacket)) {
+					CarPacket* data = reinterpret_cast<CarPacket*>(event.packet->data);
+					ParseCarData(data);
+				}
+				else {
+					ParseData((char*)event.packet->data);
+				}
 				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
 				break;
 			}
@@ -112,14 +149,14 @@ void processInput(float dt)
 {
 	if (Keyboard::key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
 		printf("in escape\n");
-		//screen.setShouldClose(true);
+		screen.setShouldClose(true);
 	}
 }
 
 int main(int argc, char **argv) {
 	
 	printf("Please enter your username: ");
-	char username[80];
+	char username[80] = { '\0' };
 	scanf_s("%79s", username, (unsigned)_countof(username));
 
 	if (enet_initialize() != 0) {
@@ -179,10 +216,18 @@ int main(int argc, char **argv) {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	Shader shader("assets/object.vert", "assets/object.frag");
-	//client_map[CLIENT_ID]->CreateCar(glm::vec3(0.0f), "assets/car1_2.png");
+
+	// tell server shader loaded 
+	char isShaderLoaded[80] = "4|";
+	strcat_s(isShaderLoaded, sizeof(isShaderLoaded), "assets/car1_2.png");
+	SendPacket(peer, isShaderLoaded);
 
 	client_map[CLIENT_ID]->SetUsername(username);
-	client_map[CLIENT_ID]->CreateCar(glm::vec3(0.0f), "assets/car1_2.png");
+
+	// send to server to parse and render for other clients
+	//CarRenderer* car = client_map[CLIENT_ID]->GetCar();
+	//CarPacket packet = { 1, CLIENT_ID, car->getTransform().pos, car->getTransform().rot, car->getImage()};
+	//SendPacket(peer, packet); // send car data to server
 
 	float deltaTime = 0.0f;
 	float lastFrame = 0.0f;
@@ -193,30 +238,22 @@ int main(int argc, char **argv) {
 		if (deltaTime > 0.033f)
 			deltaTime = 0.033f;
 
+		while (!createNewCars.empty()) {
+			CarPacket data = createNewCars.front();
+			createNewCars.pop();
+			client_map[data.id]->CreateCar(data.pos, data.assetImage);
+		}
+
 		processInput(deltaTime);
 		//send inputs to client to parse
 		char msg_data[32] = { '\0' };
 		unsigned int input = 0;
-		if (Keyboard::key(GLFW_KEY_W)) {
-			printf("W");
-			input |= 1 << 0;
-		}
-		if (Keyboard::key(GLFW_KEY_S)) {
-			input |= 1 << 1;
-			printf("S");
-		}
-		if (Keyboard::key(GLFW_KEY_A)) {
-			printf("A");
-			input |= 1 << 2;
-		}
-		if (Keyboard::key(GLFW_KEY_D)) {
-			printf("D");
-			input |= 1 << 3;
-		}
-		if (Keyboard::key(GLFW_KEY_SPACE)) {
-			printf("SPACE");
-			input |= 1 << 4;
-		}
+		if (Keyboard::key(GLFW_KEY_W)) input |= 1 << 0;
+		if (Keyboard::key(GLFW_KEY_S)) input |= 1 << 1;
+		if (Keyboard::key(GLFW_KEY_A)) input |= 1 << 2;
+		if (Keyboard::key(GLFW_KEY_D)) input |= 1 << 3;
+		if (Keyboard::key(GLFW_KEY_SPACE)) input |= 1 << 4;
+
 		if (input) {
 			sprintf_s(msg_data, sizeof(msg_data), "3|%d", input);
 			SendPacket(peer, msg_data);
@@ -236,17 +273,16 @@ int main(int argc, char **argv) {
 		shader.setMat4("view", view);
 		shader.setMat4("projection", projection);
 
-		client_map[CLIENT_ID]->GetCar()->render(shader);
-		screen.newFrame();
-		/*std::string msg = chatScreen.CheckBoxInput();
-		if (msg == "/quit") break;
-		chatScreen.PostMessageW(username, msg.c_str());
+		for (auto const& [id, client] : client_map) {
+			if (client->GetCar() != nullptr) {
+				client->GetCar()->render(shader);
+			}
+		}
 
-		char msg_data[80] = "1|";
-		strcat_s(msg_data, sizeof(msg_data), msg.c_str());
-		SendPacket(peer, msg_data);*/
+		screen.newFrame();
 	}
 
+	glfwTerminate();
 	// GAME LOOP END
 	msgThread.join(); // wait for message thread to finish (it won't in this case)
 

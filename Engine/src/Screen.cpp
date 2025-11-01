@@ -63,7 +63,7 @@ void Screen::setParameters() {
 	glfwSetMouseButtonCallback(window, Mouse::mouseButtonCallback);
 	glfwSetScrollCallback(window, Mouse::mouseWheelCallback);
 
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
 void Screen::update() {
