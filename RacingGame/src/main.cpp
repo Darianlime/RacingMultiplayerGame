@@ -23,6 +23,7 @@
 #include "io/Mouse.h"
 #include "io/Camera.h"
 #include "io/Screen.h"
+#include "io/Camera2D.h"
 
 #include "Physics/Collision2D.h"
 
@@ -32,9 +33,9 @@ float mixVal = 0.5f;
 
 Screen screen(1270, 720);
 Joystick mainJ(0);
-Camera cameras[2] = {
-	Camera(glm::vec3(0.0f, 0.0f, 0.0f)),
-	Camera(glm::vec3(10.0f, 10.0f, 0.0f))
+Camera2D cameras[2] = {
+	Camera2D(glm::vec3(0.0f, 0.0f, 0.0f)),
+	Camera2D(glm::vec3(10.0f, 10.0f, 0.0f))
 };
 int activeCam = 0;
 int activePlayer = 0;
@@ -67,6 +68,12 @@ int main() {
 
 	Quad wall(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" }, STATIC);
 	wall.init();
+	Quad wall2(glm::vec3(0.0f, 500.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" }, STATIC);
+	wall2.init();
+	Quad wall3(glm::vec3(0.0f, 1000.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" }, STATIC);
+	wall3.init();
+	Quad wall4(glm::vec3(0.0f, 1500.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, { "assets/handpaintedwall2.png" }, STATIC);
+	wall4.init();
 
 	mainJ.update();
 	if (mainJ.isPresent()) {
@@ -78,54 +85,60 @@ int main() {
 
 	while (!screen.shouldClose())
 	{
-		/*float currentTime = glfwGetTime();
+		float currentTime = glfwGetTime();
 		deltaTime = currentTime - lastFrame;
 		lastFrame = currentTime;
 		if (deltaTime > 0.033f)
 			deltaTime = 0.033f;
 		
 		processInput(deltaTime);
-		
+		//cameras[activePlayer].updateCameraVectors();
 		if (activePlayer == 0) {
 			player1.PhysicsUpdate(deltaTime);
 		}
 		else {
 			player2.PhysicsUpdate(deltaTime);
 		}
+		cameras[activePlayer].followTarget(player1.getCar().getTransform().pos);
+		cameras[activePlayer].updateCameraDirection(player1.getCar().currentAngle - 90);
 
 		bool collision1 = Collision2D::checkOBBCollisionResolve(player1.getCar().getTransform(), player2.getCar().getTransform());
 		bool collision2 = Collision2D::checkOBBCollisionResolve(player1.getCar().getTransform(), wall);
 		bool collision3 = Collision2D::checkOBBCollisionResolve(player2.getCar().getTransform(), wall);
 
 		if (collision2) {
-			std::cout << "Player 1 collided with wall!" << std::endl;
+			//std::cout << "Player 1 collided with wall!" << std::endl;
 			player1.getCar().velocity -= 3000.0f * deltaTime;
 		}
 
-		std::cout << "Collision: " << (collision2 ? "Yes" : "No") << std::endl;*/
+		//std::cout << "Collision: " << (collision2 ? "Yes" : "No") << std::endl;
 		screen.update();
+
+		shader.activate();
+
+		// create trasformation for screen
+		glm::mat4 view = glm::mat4(1.0f);
+		glm::mat4 projection = glm::mat4(1.0f);
+		//glm::mat4 zoom = glm::scale(glm::mat4(1.0f), glm::vec3(cameras[activeCam].getZoom(), cameras[activeCam].getZoom(), 1.0f));
+
+		projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 100.0f);
+		view = cameras[activeCam].getViewMatrix();
+		//view = glm::mat4(1.0f);
 
 		//shader.activate();
 
-		//// create trasformation for screen
-		//glm::mat4 view = glm::mat4(1.0f);
-		//glm::mat4 projection = glm::mat4(1.0f);
+		//shader.setFloat("mixVal", mixVal);
+		/*shader.setMat4("view", view);
+		shader.setMat4("projection", projection);*/
+		shader.setMat4("view", view);
+		shader.setMat4("projection", projection);
 
-		////view = cameras[activeCam].getViewMatrix();
-		//projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
-		//view = glm::mat4(1.0f);
-
-		////shader.activate();
-
-		////shader.setFloat("mixVal", mixVal);
-		///*shader.setMat4("view", view);
-		//shader.setMat4("projection", projection);*/
-		//shader.setMat4("view", view);
-		//shader.setMat4("projection", projection);
-
-		//wall.render(shader);
-		//player1.render(shader);
-		//player2.render(shader);
+		wall.render(shader);
+		wall2.render(shader);
+		wall3.render(shader);
+		wall4.render(shader);
+		player1.render(shader);
+		player2.render(shader);
 		//wall.render(shader);
 		screen.newFrame();
 	}
@@ -134,39 +147,52 @@ int main() {
 	return 0;
 }
 
-//void processInput(float dt)
-//{
-//	if (Keyboard::key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
-//		screen.setShouldClose(true);
-//	}
-//
-//	//change mix val
-//	if (Keyboard::key(GLFW_KEY_UP)) {
-//		mixVal += 0.05f;
-//		if (mixVal > 1) {
-//			mixVal = 1.0f;
-//		}
-//	}
-//
-//	if (Keyboard::key(GLFW_KEY_DOWN)) {
-//		mixVal -= 0.05f;
-//		if (mixVal < 0) {
-//			mixVal = 0.0f;
-//		}
-//	}
-//
-//	if (Keyboard::keyWentDown(GLFW_KEY_TAB)) {
-//		activeCam += (activeCam == 0) ? 1 : -1;
-//		activePlayer += (activePlayer == 0) ? 1 : -1;
-//	}
-//
-//	double dx = Mouse::getDX(), dy = Mouse::getDY();
-//	if (dx != 0 || dy != 0) {
-//		cameras[activeCam].updateCameraDirection(dx, dy);
-//	}
-//
-//	double scrollDy = Mouse::getScrollDY();
-//	if (scrollDy != 0) {
-//		cameras[activeCam].updateCameraZoom(scrollDy);
-//	}
-//}
+void processInput(float dt)
+{
+	if (Keyboard::key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
+		screen.setShouldClose(true);
+	}
+
+	//change mix val
+	if (Keyboard::key(GLFW_KEY_UP)) {
+		mixVal += 0.05f;
+		if (mixVal > 1) {
+			mixVal = 1.0f;
+		}
+	}
+
+	/*if (Keyboard::key(GLFW_KEY_W)) {
+		cameras[activePlayer].updateCameraPos(Camera2dDirection::UP, dt);
+	}
+	if (Keyboard::key(GLFW_KEY_S)) {
+		cameras[activePlayer].updateCameraPos(Camera2dDirection::DOWN, dt);
+	}
+	if (Keyboard::key(GLFW_KEY_A)) {
+		cameras[activePlayer].updateCameraPos(Camera2dDirection::LEFT, dt);
+	}
+	if (Keyboard::key(GLFW_KEY_D)) {
+		cameras[activePlayer].updateCameraPos(Camera2dDirection::RIGHT, dt);
+	}*/
+
+	if (Keyboard::key(GLFW_KEY_DOWN)) {
+		mixVal -= 0.05f;
+		if (mixVal < 0) {
+			mixVal = 0.0f;
+		}
+	}
+
+	if (Keyboard::keyWentDown(GLFW_KEY_TAB)) {
+		activeCam += (activeCam == 0) ? 1 : -1;
+		activePlayer += (activePlayer == 0) ? 1 : -1;
+	}
+
+	//double dx = Mouse::getDX(), dy = Mouse::getDY();
+	/*if (dx != 0 || dy != 0) {
+		cameras[activeCam].updateCameraDirection(dx, dy);
+	}*/
+
+	double scrollDy = Mouse::getScrollDY();
+	if (scrollDy != 0) {
+		cameras[activeCam].updateCameraZoom(scrollDy);
+	}
+}

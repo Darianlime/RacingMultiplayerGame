@@ -10,8 +10,14 @@ Car::Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageNa
 	currentAngle = 0.0f;
 	velocity = 0.0f;
 	traction = 0.0f;
-	driftAngle = 60.0f;
+	driftAngle = 80.0f;
 	forwardRot = 0.0f;
+	baseTraction = 0.8f;
+	tractionDecay = 0.0f;
+	slipAngle = 0.0f;
+	trackOversteer = 0.0f;
+	spinout = false;
+	pressedclutchkick = false;
 }
 
 Car::~Car() {

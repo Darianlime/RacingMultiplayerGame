@@ -24,6 +24,12 @@ public:
 	float acceleration;
 	float currentAngle;
 	float driftAngle;
+	float slipAngle;
+	float trackOversteer;
+	float baseTraction;
+	float tractionDecay;
+	bool pressedclutchkick;
+	bool spinout;
 
 	Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageName);
 	~Car();

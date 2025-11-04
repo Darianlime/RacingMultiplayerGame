@@ -60,6 +60,9 @@
     <ClCompile Include="src\Physics\Collision2D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\Camera2D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\io\Screen.h">
@@ -99,6 +102,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Physics\Collision2D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\Camera2D.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

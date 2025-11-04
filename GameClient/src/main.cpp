@@ -145,11 +145,24 @@ void* MsgLoop(ENetHost* client) {
 	}
 }
 
-void processInput(float dt)
+void processInput(ENetPeer* peer)
 {
 	if (Keyboard::key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
 		printf("in escape\n");
 		screen.setShouldClose(true);
+	}
+
+	char msg_data[32] = { '\0' };
+	unsigned int input = 0;
+	if (Keyboard::key(GLFW_KEY_W)) input |= 1 << 0;
+	if (Keyboard::key(GLFW_KEY_S)) input |= 1 << 1;
+	if (Keyboard::key(GLFW_KEY_A)) input |= 1 << 2;
+	if (Keyboard::key(GLFW_KEY_D)) input |= 1 << 3;
+	if (Keyboard::key(GLFW_KEY_SPACE)) input |= 1 << 4;
+
+	if (input) {
+		sprintf_s(msg_data, sizeof(msg_data), "3|%d", input);
+		SendPacket(peer, msg_data);
 	}
 }
 
@@ -244,20 +257,7 @@ int main(int argc, char **argv) {
 			client_map[data.id]->CreateCar(data.pos, data.assetImage);
 		}
 
-		processInput(deltaTime);
-		//send inputs to client to parse
-		char msg_data[32] = { '\0' };
-		unsigned int input = 0;
-		if (Keyboard::key(GLFW_KEY_W)) input |= 1 << 0;
-		if (Keyboard::key(GLFW_KEY_S)) input |= 1 << 1;
-		if (Keyboard::key(GLFW_KEY_A)) input |= 1 << 2;
-		if (Keyboard::key(GLFW_KEY_D)) input |= 1 << 3;
-		if (Keyboard::key(GLFW_KEY_SPACE)) input |= 1 << 4;
-
-		if (input) {
-			sprintf_s(msg_data, sizeof(msg_data), "3|%d", input);
-			SendPacket(peer, msg_data);
-		}
+		processInput(peer);
 
 		screen.update();
 
