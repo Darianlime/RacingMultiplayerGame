@@ -16,10 +16,13 @@ private:
 	int nChannels;
 public:
 	Texture();
+	Texture(bool defaultParams);
 	Texture(const char* path, const char* name, bool defaultParams = true);
 
 	void generate();
 	void load(bool flip = true);
+
+	void setTexImage(GLint internalformat, GLsizei width, GLsizei height, GLenum format, const void* data);
 
 	void setFilters(GLenum all);
 	void setFilters(GLenum mag, GLenum min);

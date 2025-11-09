@@ -72,7 +72,6 @@ GLuint Shader::compileShader(const char* filePath, GLuint type) {
 	glShaderSource(ret, 1, &shader, NULL);
 	glCompileShader(ret);
 
-	// catch error
 	glGetShaderiv(ret, GL_COMPILE_STATUS, &success);
 	if (!success) {
 		glGetShaderInfoLog(ret, 512, NULL, infoLog);

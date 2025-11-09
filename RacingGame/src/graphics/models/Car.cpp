@@ -14,8 +14,13 @@ Car::Car(glm::vec3 position, float minSpeed, float maxSpeed, const char* imageNa
 	forwardRot = 0.0f;
 	baseTraction = 0.8f;
 	tractionDecay = 0.0f;
+	initalTractionDecay = 0.0f;
 	slipAngle = 0.0f;
 	trackOversteer = 0.0f;
+	lateralVelocity = 0.0f; // sideways momentum
+	driftDir = 0.0f;        // -1 = left drift, +1 = right drift
+	prevSlipAngle = 0.0f;
+	chainCooldown = 0.0f;
 	spinout = false;
 	pressedclutchkick = false;
 }

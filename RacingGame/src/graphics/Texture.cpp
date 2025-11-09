@@ -8,6 +8,15 @@ int Texture::currentId = 0;
 
 Texture::Texture() = default;
 
+Texture::Texture(bool defaultParams) {
+	generate();
+
+	if (defaultParams) {
+		setFilters(GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
+		setWrap(GL_CLAMP_TO_EDGE);
+	}
+}
+
 Texture::Texture(const char* path, const char* name, bool defaultParams) : path(path), name(name), id(currentId++){
 	generate();
 
@@ -52,6 +61,10 @@ void Texture::load(bool flip) {
 		std::cout << "failed to load texture" << std::endl;
 	}
 	stbi_image_free(data);
+}
+
+void Texture::setTexImage(GLint internalformat, GLsizei width, GLsizei height, GLenum format, const void* data) {
+	glTexImage2D(GL_TEXTURE_2D, 0, internalformat, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 }
 
 void Texture::setFilters(GLenum all) {

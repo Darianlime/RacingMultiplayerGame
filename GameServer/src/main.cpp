@@ -12,10 +12,17 @@
 #include <chrono>
 #include <thread>
 
+#include "Physics/Collision2D.h"
+#include "Models/Quad.hpp"
+
 using namespace std::chrono;
 using namespace std::this_thread;
 
-struct Inputs {
+typedef enum {
+	NONE, W, S, A, D, SPACE
+} KeyInput;
+
+struct InputState {
 	bool W = false;
 	bool S = false;
 	bool A = false;
@@ -31,10 +38,14 @@ struct CarPacket {
 	char assetImage[80];
 };
 
+struct CarPhysicsPacket {
+	std::vector<glm::vec3> worldVerts;
+	PhysicsType type;
+};
+
 struct Car {
-	glm::vec3 pos;
-	glm::vec3 size;
-	float rot;
+	Quad transform;
+	PhysicsType type;
 
 	float velocity;
 	float accel;
@@ -46,12 +57,14 @@ struct Car {
 	std::string assetImage;
 
 	Car() : 
-		pos(0.0f), size(1.0f), rot(0.0f), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(0.0f), forwardRot(0.0f), assetImage("") { }
+		transform(DYNAMIC), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(0.0f), forwardRot(0.0f), assetImage("") { }
 
 	glm::vec3 getForwardDirection() {
 		float angleRad = glm::radians(currentAngle - 90.0f);
 		return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
 	}
+
+	Quad& getTransform() { return transform; }
 };
 
 class ClientData {
@@ -60,7 +73,7 @@ private:
 	std::string username;
 
 	std::unique_ptr<Car> car;
-	Inputs inputState;
+	InputState inputState;
 public:
 
 	ClientData(int id) : m_id(id) {}
@@ -69,7 +82,7 @@ public:
 	void CreateCar() { car = std::make_unique<Car>(); }
 
 	Car* GetCar() const { return car.get(); }
-	Inputs& GetInputState() { return inputState; }
+	InputState& GetInputState() { return inputState; }
 
 	int GetID() const { return m_id; }
 	const std::string& GetUsername() const { return username; }
@@ -120,15 +133,15 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 	}
 	case 3: // process input update physics
 	{
-		unsigned int input = 0;
+		unsigned int input = KeyInput::NONE;
 		sscanf_s(data, "3|%u", &input);
 		//std::cout << "Input Sent by " << input << peer->address.host << peer->address.port << std::endl;
-		Inputs& inputState = client_map[id]->GetInputState();
-		inputState.W = (input & (1 << 0));
-		inputState.S = (input & (1 << 1)) >> 1;
-		inputState.A = (input & (1 << 2)) >> 2;
-		inputState.D = (input & (1 << 3)) >> 3;
-		inputState.Space = (input & (1 << 4)) >> 4;
+		InputState& inputState = client_map[id]->GetInputState();
+		inputState.W = input == KeyInput::W;
+		inputState.S = input == KeyInput::S;
+		inputState.A = input == KeyInput::A;
+		inputState.D = input == KeyInput::D;
+		inputState.Space = input == KeyInput::SPACE;
 		//std::cout << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 		break;
 	} 
@@ -144,7 +157,7 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 
 		for (auto const& [id, client] : client_map) {
 			Car* car = client->GetCar();
-			CarPacket packet = { 2, id, car->pos, car->rot, ""};
+			CarPacket packet = { 2, id, car->getTransform().pos, car->getTransform().rot, ""};
 			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 			SendPacket(peer, packet);
 		}
@@ -168,7 +181,7 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPacket* data) {
 void PhysicsUpdate(double fixedDeltaTime) {
 	for (auto& [id, client] : client_map) {
 		Car* car = client->GetCar();
-		Inputs& inputState = client_map[id]->GetInputState();
+		InputState& inputState = client_map[id]->GetInputState();
 		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 		if (inputState.W) {
 			car->accel = car->maxSpeed;
@@ -189,14 +202,21 @@ void PhysicsUpdate(double fixedDeltaTime) {
 		//printf("Velocity: %.2f\n", client_map[id]->GetCar()->velocity);
 		glm::vec3 forward = car->getForwardDirection();
 		forward = glm::normalize(forward);
-		car->pos += forward * (car->velocity * (float)fixedDeltaTime);
+		car->getTransform().pos += forward * (car->velocity * (float)fixedDeltaTime);
 		//printf("x: %.2f, y: %.2f\n", client_map[id]->GetCar()->pos.x, client_map[id]->GetCar()->pos.y);
 		car->currentAngle = -car->forwardRot;
-
 		//zero out inputs
-		memset(&inputState, 0, sizeof(struct Inputs));
+		memset(&inputState, 0, sizeof(struct InputState));
 		//std::cout << "end " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 	}
+	//==== COLLISION HANDLER ===============================================
+	/*for (auto& [id, client] : client_map) {
+		Car* car1 = client->GetCar();
+		for (auto& [id, client] : client_map) {
+			Car* car2 = client->GetCar();
+			bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+		}
+	}*/
 }
 
 int main(int argc, char** argv) {
@@ -301,7 +321,7 @@ int main(int argc, char** argv) {
 		// send updated transform to clients
 		for (auto const& [id, client] : client_map) {
 			Car* car = client->GetCar();
-			CarPacket packet = { 1, id, car->pos, car->rot, "" };
+			CarPacket packet = { 1, id, car->getTransform().pos, car->getTransform().rot, ""};
 			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 			BroadcastPacket(server, packet);
 		}

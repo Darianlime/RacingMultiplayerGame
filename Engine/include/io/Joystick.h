@@ -32,34 +32,35 @@
 #define GLFW_JOYSTICK_AXES_RIGHT_TRIGGER 4
 #define GLFW_JOYSTICK_AXES_RIGHT_STICK_Y 5
 
-class Joystick {
-private:
-	int present;
-	int id;
-	const char* name;
+namespace Engine {
+	class Joystick {
+	private:
+		int present;
+		int id;
+		const char* name;
 
-	int axesCount;
-	const float* axes;
+		int axesCount;
+		const float* axes;
 
-	int buttonCount;
-	const unsigned char* buttons;
-public:
-	Joystick(int i);
+		int buttonCount;
+		const unsigned char* buttons;
+	public:
+		Joystick(int i);
 
-	void update();
-	
-	//accessers
-	float axesState(int axis);
-	unsigned char buttonState(int button);
+		void update();
 
-	int getAxesCount();
-	int getButtonCount();
+		//accessers
+		float axesState(int axis);
+		unsigned char buttonState(int button);
 
-	bool isPresent();
-	const char* getName();
+		int getAxesCount();
+		int getButtonCount();
 
-	static int getID(int i);
+		bool isPresent();
+		const char* getName();
 
-};
+		static int getID(int i);
 
+	};
+}
 #endif // !JOYSTICK_H

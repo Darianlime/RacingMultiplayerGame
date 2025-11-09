@@ -32,11 +32,8 @@
     <ClCompile Include="src\Screen.cpp" />
     <ClCompile Include="src\Shader.cpp" />
     <ClCompile Include="src\stb.cpp" />
+    <ClCompile Include="src\Text.cpp" />
     <ClCompile Include="src\Texture.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="assets\object.frag" />
-    <None Include="assets\object.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\graphics\Mesh.h" />
@@ -45,6 +42,7 @@
     <ClInclude Include="include\graphics\models\CarRenderer.h" />
     <ClInclude Include="include\graphics\models\Quad.hpp" />
     <ClInclude Include="include\graphics\Shader.h" />
+    <ClInclude Include="include\graphics\Text.h" />
     <ClInclude Include="include\graphics\Texture.h" />
     <ClInclude Include="include\io\Camera.h" />
     <ClInclude Include="include\io\Joystick.h" />

@@ -17,8 +17,8 @@ private:
 	float minSpeed;
 	float maxSpeed;
 	float turnRate;
-	float traction;
 public:
+	float traction;
 	float forwardRot;
 	float velocity;
 	float acceleration;
@@ -28,6 +28,11 @@ public:
 	float trackOversteer;
 	float baseTraction;
 	float tractionDecay;
+	float initalTractionDecay;
+	float lateralVelocity;
+	float driftDir;
+	float prevSlipAngle;
+	float chainCooldown;
 	bool pressedclutchkick;
 	bool spinout;
 

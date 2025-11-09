@@ -25,6 +25,7 @@ public:
     std::vector<Texture> textures;
 	std::vector<glm::vec3> worldVerts; // for collision detection
 	PhysicsType physicsType;
+    glm::mat4 model;
 
     // Default constructor
     Quad() : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(STATIC) {}
@@ -60,11 +61,10 @@ public:
 	}
 
     void render(Shader shader) {
-        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::mat4(1.0f);
         model = glm::translate(model, pos);
         model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
         model = glm::scale(model, glm::vec3(textures[0].getWidth(), textures[0].getHeight(), 1.0f) * size);
-        //model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
         shader.setMat4("model", model);
         for (int i = 0; i < 4; i++) {
 			glm::vec3 localPos = glm::vec3(vertices[i * 8 + 0], vertices[i * 8 + 1], vertices[i * 8 + 2]);

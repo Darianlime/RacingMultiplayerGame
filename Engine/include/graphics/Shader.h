@@ -9,31 +9,32 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-class Shader {
-private:
-public:
+namespace Engine {
+	class Shader {
+	private:
+	public:
 
-	unsigned int id;
+		unsigned int id;
 
-	Shader();
-	Shader(const char* vertexShaderPath, const char* fragmentShaderPath);
+		Shader();
+		Shader(const char* vertexShaderPath, const char* fragmentShaderPath);
 
-	void generate(const char* vertexShaderPath, const char* fragmentShaderPath);
+		void generate(const char* vertexShaderPath, const char* fragmentShaderPath);
 
-	void activate();
+		void activate();
 
-	std::string loadShaderSrc(const char* filepath);
-	GLuint compileShader(const char* filepath, GLuint type);
+		std::string loadShaderSrc(const char* filepath);
+		GLuint compileShader(const char* filepath, GLuint type);
 
-	// uniform functions
-	void setMat4(const std::string& name, glm::mat4 val);
-	void setBool(const std::string& name, bool value);
-	void setInt(const std::string& name, int value);
-	void setFloat(const std::string& name, float value);
-	void set3Float(const std::string& name, glm::vec3 v);
-	void set3Float(const std::string& name, float v1, float v2, float v3);
-	void set4Float(const std::string& name, float v1, float v2, float v3, float v4);
+		// uniform functions
+		void setMat4(const std::string& name, glm::mat4 val);
+		void setBool(const std::string& name, bool value);
+		void setInt(const std::string& name, int value);
+		void setFloat(const std::string& name, float value);
+		void set3Float(const std::string& name, glm::vec3 v);
+		void set3Float(const std::string& name, float v1, float v2, float v3);
+		void set4Float(const std::string& name, float v1, float v2, float v3, float v4);
 
-};
-
+	};
+}
 #endif // !SHADER_H

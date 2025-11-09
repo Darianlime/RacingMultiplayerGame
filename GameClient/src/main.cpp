@@ -20,10 +20,17 @@
 
 #include "graphics/models/CarRenderer.h"
 #include "graphics/Shader.h"
+#include "graphics/Text.h"
+
+using namespace Engine;
 
 static Screen screen(1270, 720);
 static Joystick mainJ(0);
 static int CLIENT_ID = -1; // unique client ID assigned by server
+
+typedef enum {
+	NONE, W, S, A, D, SPACE
+} KeyInput;
 
 struct CarPacket {
 	int parseType;
@@ -31,6 +38,11 @@ struct CarPacket {
 	glm::vec3 pos;
 	float rot;
 	char assetImage[80];
+};
+
+struct CarPhysicsPacket {
+	std::vector<glm::vec3> worldVerts;
+	PhysicsType type;
 };
 
 static std::queue<CarPacket> createNewCars;
@@ -41,14 +53,17 @@ private:
 	std::string username;
 
 	std::unique_ptr<CarRenderer> carRenderer;
+	std::unique_ptr<Text> textRenderer;
 	
 public:
 	ClientData(int id) : m_id(id) {}
 
 	void SetUsername(std::string name) { username = name; }
 	void CreateCar(glm::vec3 pos, const char* assetImage) { carRenderer = std::make_unique<CarRenderer>(pos, assetImage); }
+	void CreateText(const char* fontFile, int fontSize) { textRenderer = std::make_unique<Text>(fontFile, fontSize); }
 
 	CarRenderer* GetCar() const { return carRenderer.get(); }
+	Text* GetText() const { return textRenderer.get(); }
 
 	int GetID() const { return m_id; }
 	const std::string& GetUsername() const { return username; }
@@ -110,14 +125,14 @@ void ParseCarData(CarPacket* data) {
 	case 2: // create a car render for other clients
 	{ 
 		if (data->id != CLIENT_ID) {
-			printf("creating car: %d, null?: %d", data->id, client_map[data->id] == nullptr);
+			printf("case 2 creating car: %d, null?: %d\n", data->id, client_map[data->id] == nullptr);
 			createNewCars.push(*data);
 		}
 		break;
 	} 
 	case 3: // create a car for this client
 	{
-		printf("%s", data->assetImage);
+		printf("case 3 %s\n", data->assetImage);
 		createNewCars.push(*data);
 		break;
 	}
@@ -153,15 +168,15 @@ void processInput(ENetPeer* peer)
 	}
 
 	char msg_data[32] = { '\0' };
-	unsigned int input = 0;
-	if (Keyboard::key(GLFW_KEY_W)) input |= 1 << 0;
-	if (Keyboard::key(GLFW_KEY_S)) input |= 1 << 1;
-	if (Keyboard::key(GLFW_KEY_A)) input |= 1 << 2;
-	if (Keyboard::key(GLFW_KEY_D)) input |= 1 << 3;
-	if (Keyboard::key(GLFW_KEY_SPACE)) input |= 1 << 4;
+	unsigned int input = KeyInput::NONE;
+	if (Keyboard::key(GLFW_KEY_W)) input = KeyInput::W;
+	if (Keyboard::key(GLFW_KEY_S)) input = KeyInput::S;
+	if (Keyboard::key(GLFW_KEY_A)) input = KeyInput::A;
+	if (Keyboard::key(GLFW_KEY_D)) input = KeyInput::D;
+	if (Keyboard::key(GLFW_KEY_SPACE)) input = KeyInput::SPACE;
 
 	if (input) {
-		sprintf_s(msg_data, sizeof(msg_data), "3|%d", input);
+		sprintf_s(msg_data, sizeof(msg_data), "3|%u", input);
 		SendPacket(peer, msg_data);
 	}
 }
@@ -228,8 +243,17 @@ int main(int argc, char **argv) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	Text text("assets/fonts/OCRAEXT.TTF", 48);
+	if (text.init() == -1) {
+		std::cout << "Failed to init text" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
 	Shader shader("assets/object.vert", "assets/object.frag");
-
+	Shader textShader("assets/text.vert", "assets/text.frag");	
+	glm::mat4 projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
+	textShader.activate();
+	textShader.setMat4("projection", projection);
 	// tell server shader loaded 
 	char isShaderLoaded[80] = "4|";
 	strcat_s(isShaderLoaded, sizeof(isShaderLoaded), "assets/car1_2.png");
@@ -255,30 +279,43 @@ int main(int argc, char **argv) {
 			CarPacket data = createNewCars.front();
 			createNewCars.pop();
 			client_map[data.id]->CreateCar(data.pos, data.assetImage);
+			/*client_map[data.id]->CreateText("assets/fonts/OCRAEXT.TTF", 48);
+			if (client_map[data.id]->GetText()->init() == -1) {
+				std::cout << "Failed to init text" << std::endl;
+				glfwTerminate();
+				return -1;
+			}*/
 		}
 
 		processInput(peer);
 
 		screen.update();
 
-		shader.activate();
-
 		// create trasformation for screen
 		glm::mat4 view = glm::mat4(1.0f);
 		glm::mat4 projection = glm::mat4(1.0f);
 
 		projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
-		view = glm::mat4(1.0f);
+		textShader.activate();
+		textShader.setMat4("projection", projection);
 
+		shader.activate();
 		shader.setMat4("view", view);
 		shader.setMat4("projection", projection);
 
 		for (auto const& [id, client] : client_map) {
 			if (client->GetCar() != nullptr) {
 				client->GetCar()->render(shader);
+				//client->GetText()->renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+				//client->GetCar()->render(shader);
 			}
 		}
-
+		for (auto const& [id, client] : client_map) {
+			if (client->GetCar() != nullptr) {
+				text.renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+				//client->GetText()->renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+			}
+		}
 		screen.newFrame();
 	}
 

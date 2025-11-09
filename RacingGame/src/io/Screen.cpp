@@ -36,7 +36,7 @@ bool Screen::init() {
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		glfwTerminate();
-		return -1;
+		return false;
 	}
 	setParameters();
 	return true;

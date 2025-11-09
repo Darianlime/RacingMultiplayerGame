@@ -10,17 +10,18 @@
 
 #include "Mesh.h"
 
-class Model {
-public:
-	std::vector<Mesh> meshes;
-	
-	Model();
-	
-	void init();
+namespace Engine {
+	class Model {
+	public:
+		std::vector<Mesh> meshes;
 
-	void render(Shader shader);
+		Model();
 
-	void cleanup();
-};
+		void init();
 
+		void render(Shader shader);
+
+		void cleanup();
+	};
+}
 #endif // !MODEL_H

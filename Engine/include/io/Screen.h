@@ -4,32 +4,33 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-class Screen {
-private:
-	GLFWmonitor* monitor;
-	const GLFWvidmode* mode;
-	GLFWwindow* window;
-public:
-	static unsigned int SCR_WIDTH;
-	static unsigned int SCR_HEIGHT;
+namespace Engine {
+	class Screen {
+	private:
+		GLFWmonitor* monitor;
+		const GLFWvidmode* mode;
+		GLFWwindow* window;
+	public:
+		static unsigned int SCR_WIDTH;
+		static unsigned int SCR_HEIGHT;
 
-	static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+		static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 
-	Screen();
-	Screen(unsigned int scr_width, unsigned int scr_height);
+		Screen();
+		Screen(unsigned int scr_width, unsigned int scr_height);
 
-	bool init();
+		bool init();
 
-	void GetMonitorSizeGLFW(GLFWmonitor* monitor, const GLFWvidmode* mode, unsigned int& width, unsigned int& height);
+		void GetMonitorSizeGLFW(GLFWmonitor* monitor, const GLFWvidmode* mode, unsigned int& width, unsigned int& height);
 
-	void setParameters();
+		void setParameters();
 
-	//main loop
-	void update();
-	void newFrame();
+		//main loop
+		void update();
+		void newFrame();
 
-	bool shouldClose();
-	void setShouldClose(bool shouldClose);
-};
-
+		bool shouldClose();
+		void setShouldClose(bool shouldClose);
+	};
+}
 #endif // !SCREEN_H#pragma once

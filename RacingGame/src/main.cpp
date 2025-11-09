@@ -16,6 +16,8 @@
 //#include "graphics/Texture.h"
 #include "graphics/models/Quad.hpp"
 #include "graphics/models/Car.h"
+#include "graphics/Text.h"
+
 #include "Player.h"
 
 #include "io/Joystick.h"
@@ -32,6 +34,7 @@ void processInput(float dt);
 float mixVal = 0.5f;
 
 Screen screen(1270, 720);
+Text text("assets/fonts/OCRAEXT.TTF", 48);
 Joystick mainJ(0);
 Camera2D cameras[2] = {
 	Camera2D(glm::vec3(0.0f, 0.0f, 0.0f)),
@@ -60,6 +63,16 @@ int main() {
 
 	// SHADERS============================================================
 	Shader shader("assets/object.vert", "assets/object.frag");
+	Shader textShader("assets/text.vert", "assets/text.frag");
+	glm::mat4 projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 100.0f);
+	textShader.activate();
+	textShader.setInt("isProjectedScreen", false);
+	textShader.setMat4("projection", projection);
+	if (text.init() == -1) {
+		std::cout << "Failed to init text" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
 
 	Car car1(glm::vec3(1000.0f, 0.0f, 0.0f), -500.0f, 2700.0f,  "assets/car1_2.png");
 	Player player1(car1, 0);
@@ -139,7 +152,9 @@ int main() {
 		wall4.render(shader);
 		player1.render(shader);
 		player2.render(shader);
+
 		//wall.render(shader);
+		text.renderText(textShader, "CAR1", -60.0f, -35.0f, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
 		screen.newFrame();
 	}
 

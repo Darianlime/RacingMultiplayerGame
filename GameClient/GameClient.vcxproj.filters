@@ -22,5 +22,7 @@
   <ItemGroup>
     <None Include="assets\object.frag" />
     <None Include="assets\object.vert" />
+    <None Include="assets\text.vert" />
+    <None Include="assets\text.frag" />
   </ItemGroup>
 </Project>
