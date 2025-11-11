@@ -1,5 +1,5 @@
-#ifndef CUBE_HPP
-#define CUBE_HPP
+#ifndef QUAD_HPP
+#define QUAD_HPP
 
 #include "../Model.h"
 
@@ -18,6 +18,7 @@ namespace Engine {
             -0.5f, -0.5f, 0.0f,		0.0f,  0.0f, -1.0f,     0.0f, 0.0f		// Bottom-left
         };
     public:
+        static const int noVertices = 4;
         glm::vec3 pos;
         glm::vec3 size;
         float rot;
@@ -27,22 +28,17 @@ namespace Engine {
         PhysicsType physicsType;
 
         // Default constructor
-        Quad() : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(STATIC) {}
+        Quad() : pos(0.0f), size(1.0f), rot(0.0f), worldVerts(noVertices, glm::vec3(0.0f)), textureImageNames(textureImageNames), physicsType(STATIC) {}
 
-        Quad(PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(type) {}
+        Quad(PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), worldVerts(noVertices, glm::vec3(0.0f)), textureImageNames(textureImageNames), physicsType(type) {}
 
-        Quad(std::vector<const char*> textureImageNames, PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), textureImageNames(textureImageNames), physicsType(type) {}
+        Quad(std::vector<const char*> textureImageNames, PhysicsType type) : pos(0.0f), size(1.0f), rot(0.0f), worldVerts(noVertices, glm::vec3(0.0f)), textureImageNames(textureImageNames), physicsType(type) {}
 
         Quad(glm::vec3 pos, glm::vec3 size, float rot, std::vector<const char*> textureImageNames, PhysicsType type)
-            : pos(pos), size(size), rot(rot), textureImageNames(textureImageNames), physicsType(type) {
+            : pos(pos), size(size), rot(rot), worldVerts(noVertices, glm::vec3(0.0f)), textureImageNames(textureImageNames), physicsType(type) {
         }
 
         void init() {
-            int noVertices = 4; // was 6, but only 4 vertex entries are provided
-
-            for (int i = 0; i < noVertices; i++) {
-                worldVerts.push_back(glm::vec3(0.0f, 0.0f, 0.0f));
-            }
             std::vector<unsigned int> indices = { 0, 1, 3, 1, 2, 3 };
             loadTextures();
 
@@ -76,4 +72,4 @@ namespace Engine {
         }
     };
 }
-#endif // CUBE_HPP
+#endif // QUAD_HPP

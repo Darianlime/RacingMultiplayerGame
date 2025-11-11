@@ -6,6 +6,7 @@
 #include <cstring>
 #include <thread>
 #include <map>
+#include <algorithm>
 #include <queue>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -26,13 +27,25 @@ using namespace Engine;
 
 static Screen screen(1270, 720);
 static Joystick mainJ(0);
+static std::atomic<bool> connected = false;
 static int CLIENT_ID = -1; // unique client ID assigned by server
 
 typedef enum {
 	NONE, W, S, A, D, SPACE
 } KeyInput;
 
+enum PacketType {
+	NEW_CLIENT_PACKET,
+	CAR_PACKET,
+	CAR_PHYSICS_PACKET
+};
+
+struct PacketHeader {
+	uint8_t type;
+};
+
 struct CarPacket {
+	PacketHeader packetType;
 	int parseType;
 	int id;
 	glm::vec3 pos;
@@ -41,8 +54,10 @@ struct CarPacket {
 };
 
 struct CarPhysicsPacket {
-	std::vector<glm::vec3> worldVerts;
-	PhysicsType type;
+	PacketHeader packetType;
+	int parseType;
+	int id;
+	glm::vec3 worldVerts[Quad::noVertices];
 };
 
 static std::queue<CarPacket> createNewCars;
@@ -81,6 +96,11 @@ void SendPacket(ENetPeer* peer, CarPacket data) {
 	enet_peer_send(peer, 0, packet); // send packet on channel 0
 }
 
+void SendPacket(ENetPeer* peer, CarPhysicsPacket data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_peer_send(peer, 0, packet); // send packet on channel 0
+}
+
 // Parsing new clients 
 void ParseData(char* data) {
 	int data_type;
@@ -90,10 +110,10 @@ void ParseData(char* data) {
 	switch (data_type) {
 	case 2: // another client joined
 	{
+		char username[80] = { '\0' };
+		sscanf_s(data, "%*d|%*d|%79[^|]", username, (unsigned)sizeof(username));
 		if (client_map.find(id) == client_map.end()) {
 			std::cout << "id assigned?" << id << std::endl;
-			char username[80] = { '\0' };
-			sscanf_s(data, "%*d|%*d|%79[^|]", username, (unsigned)sizeof(username));
 			client_map[id] = new ClientData(id);
 			client_map[id]->SetUsername(username);
 		}
@@ -102,8 +122,9 @@ void ParseData(char* data) {
 	case 3: // new client data
 	{
 		CLIENT_ID = id; // server assigns unique client ID
-		std::cout << "id assigned?" << CLIENT_ID << std::endl;
 		client_map[id] = new ClientData(id);
+		client_map[id]->CreateCar(glm::vec3(0.0f), "assets/car1_2.png");
+		std::cout << "id assigned?" << CLIENT_ID  << std::endl;
 		break;
 	}
 	}
@@ -115,10 +136,12 @@ void ParseCarData(CarPacket* data) {
 	switch (data->parseType) {
 	case 1: // update car data
 	{
-		CarRenderer* car = client_map[data->id]->GetCar();
-		if (car != nullptr) {
-			car->getTransform().pos = data->pos;
-			car->getTransform().rot = data->rot;
+		if (client_map[data->id] != nullptr) {
+			CarRenderer* car = client_map[data->id]->GetCar();
+			if (car != nullptr) {
+				car->getTransform().pos = data->pos;
+				car->getTransform().rot = data->rot;
+			}
 		}
 		break;
 	}
@@ -130,35 +153,33 @@ void ParseCarData(CarPacket* data) {
 		}
 		break;
 	} 
-	case 3: // create a car for this client
-	{
-		printf("case 3 %s\n", data->assetImage);
-		createNewCars.push(*data);
-		break;
-	}
 	}
 	
 }
 
-void* MsgLoop(ENetHost* client) {
-	while (true) {
-		ENetEvent event;
-		while (enet_host_service(client, &event, 10) > 0) {
-			switch (event.type) {
-			case ENET_EVENT_TYPE_RECEIVE:
-				if (event.packet->dataLength == sizeof(CarPacket)) {
-					CarPacket* data = reinterpret_cast<CarPacket*>(event.packet->data);
-					ParseCarData(data);
-				}
-				else {
-					ParseData((char*)event.packet->data);
-				}
-				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
-				break;
-			}
-		}
-	}
-}
+//void* MsgLoop(ENetHost* client) {
+//	while (true) {
+//		ENetEvent event;
+//		while (enet_host_service(client, &event, 1) > 0) {
+//			switch (event.type) {
+//			case ENET_EVENT_TYPE_RECEIVE:
+//				uint8_t header = reinterpret_cast<PacketHeader*>(event.packet->data)->type;
+//				switch (header) {
+//				case PacketType::CAR_PACKET:
+//				{
+//					ParseCarData(reinterpret_cast<CarPacket*>(event.packet->data));
+//					break;
+//				}
+//				default:
+//					ParseData((char*)event.packet->data);
+//					break;
+//				}
+//				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
+//				break;
+//			}
+//		}
+//	}
+//}
 
 void processInput(ENetPeer* peer)
 {
@@ -174,8 +195,9 @@ void processInput(ENetPeer* peer)
 	if (Keyboard::key(GLFW_KEY_A)) input = KeyInput::A;
 	if (Keyboard::key(GLFW_KEY_D)) input = KeyInput::D;
 	if (Keyboard::key(GLFW_KEY_SPACE)) input = KeyInput::SPACE;
-
+	
 	if (input) {
+		//printf("%u\n", input);
 		sprintf_s(msg_data, sizeof(msg_data), "3|%u", input);
 		SendPacket(peer, msg_data);
 	}
@@ -226,14 +248,6 @@ int main(int argc, char **argv) {
 		return EXIT_SUCCESS; // exit without error, server might be offline
 	}
 
-	// Send username to server
-	char str_data[80] = "2|";
-	strcat_s(str_data, sizeof(str_data), username);
-	SendPacket(peer, str_data); // send username to server
-
-	// Create a thread to handle incoming messages
-	std::thread msgThread(MsgLoop, client);
-
 	// GAME LOOP START
 	if (!screen.init()) {
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -250,21 +264,13 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	Shader shader("assets/object.vert", "assets/object.frag");
-	Shader textShader("assets/text.vert", "assets/text.frag");	
+	Shader textShader("assets/text.vert", "assets/text.frag");
 	glm::mat4 projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
 	textShader.activate();
 	textShader.setMat4("projection", projection);
-	// tell server shader loaded 
-	char isShaderLoaded[80] = "4|";
-	strcat_s(isShaderLoaded, sizeof(isShaderLoaded), "assets/car1_2.png");
-	SendPacket(peer, isShaderLoaded);
 
-	client_map[CLIENT_ID]->SetUsername(username);
-
-	// send to server to parse and render for other clients
-	//CarRenderer* car = client_map[CLIENT_ID]->GetCar();
-	//CarPacket packet = { 1, CLIENT_ID, car->getTransform().pos, car->getTransform().rot, car->getImage()};
-	//SendPacket(peer, packet); // send car data to server
+	// Create a thread to handle incoming messages
+	//std::thread msgThread(MsgLoop, client);
 
 	float deltaTime = 0.0f;
 	float lastFrame = 0.0f;
@@ -275,53 +281,91 @@ int main(int argc, char **argv) {
 		if (deltaTime > 0.033f)
 			deltaTime = 0.033f;
 
-		while (!createNewCars.empty()) {
-			CarPacket data = createNewCars.front();
-			createNewCars.pop();
-			client_map[data.id]->CreateCar(data.pos, data.assetImage);
-			/*client_map[data.id]->CreateText("assets/fonts/OCRAEXT.TTF", 48);
-			if (client_map[data.id]->GetText()->init() == -1) {
-				std::cout << "Failed to init text" << std::endl;
-				glfwTerminate();
-				return -1;
-			}*/
-		}
+		ENetEvent event;
+		while (enet_host_service(client, &event, 1) > 0) {
+			switch (event.type) {
+			case ENET_EVENT_TYPE_RECEIVE:
+			{
+				uint8_t header = reinterpret_cast<PacketHeader*>(event.packet->data)->type;
+				switch (header) {
+				case PacketType::CAR_PACKET:
+				{
+					ParseCarData(reinterpret_cast<CarPacket*>(event.packet->data));
+					break;
+				}
+				default: // new user
+					ParseData((char*)event.packet->data);
+					if (!connected && CLIENT_ID != -1) {
+						client_map[CLIENT_ID]->SetUsername(username);
 
-		processInput(peer);
+						char str_data[80] = "2|";
+						strcat_s(str_data, sizeof(str_data), username);
+						SendPacket(peer, str_data); // send username to server
 
-		screen.update();
-
-		// create trasformation for screen
-		glm::mat4 view = glm::mat4(1.0f);
-		glm::mat4 projection = glm::mat4(1.0f);
-
-		projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
-		textShader.activate();
-		textShader.setMat4("projection", projection);
-
-		shader.activate();
-		shader.setMat4("view", view);
-		shader.setMat4("projection", projection);
-
-		for (auto const& [id, client] : client_map) {
-			if (client->GetCar() != nullptr) {
-				client->GetCar()->render(shader);
-				//client->GetText()->renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
-				//client->GetCar()->render(shader);
+						char isShaderLoaded[80] = "4|";
+						strcat_s(isShaderLoaded, sizeof(isShaderLoaded), "assets/car1_2.png");
+						SendPacket(peer, isShaderLoaded);
+						connected = true;
+					}
+					break;
+				}
+				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
+				break;
+			}
 			}
 		}
-		for (auto const& [id, client] : client_map) {
-			if (client->GetCar() != nullptr) {
-				text.renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
-				//client->GetText()->renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+
+		if (connected) {
+			while (!createNewCars.empty()) {
+				CarPacket data = createNewCars.front();
+				createNewCars.pop();
+				client_map[data.id]->CreateCar(data.pos, data.assetImage);
 			}
+
+			processInput(peer);
+
+			screen.update();
+
+			// create trasformation for screen
+			glm::mat4 view = glm::mat4(1.0f);
+			glm::mat4 projection = glm::mat4(1.0f);
+
+			projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
+			textShader.activate();
+			textShader.setMat4("projection", projection);
+
+			shader.activate();
+			shader.setMat4("view", view);
+			shader.setMat4("projection", projection);
+
+			for (auto const& [id, client] : client_map) {
+				if (client != NULL && client->GetCar() != nullptr) {
+					client->GetCar()->render(shader);
+				}
+			}
+			for (auto const& [id, client] : client_map) {
+				if (client != NULL && client->GetCar() != nullptr) {
+					//printf("%s\n", client->GetUsername().c_str());
+					text.renderText(textShader, client->GetUsername(), client->GetCar()->getTransform().pos.x, client->GetCar()->getTransform().pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+				}
+			}
+
+			if (client_map[CLIENT_ID]->GetCar() != nullptr) {
+				CarPhysicsPacket packet;
+				packet.packetType.type = PacketType::CAR_PHYSICS_PACKET;
+				packet.parseType = 1;
+				packet.id = CLIENT_ID;
+				std::copy_n(client_map[CLIENT_ID]->GetCar()->getTransform().worldVerts.begin(), Quad::noVertices, packet.worldVerts);
+				SendPacket(peer, packet);
+			}
+
+			screen.newFrame();
 		}
-		screen.newFrame();
 	}
 
 	glfwTerminate();
 	// GAME LOOP END
-	msgThread.join(); // wait for message thread to finish (it won't in this case)
+	//msgThread.join(); // wait for message thread to finish (it won't in this case)
 
 	enet_peer_disconnect(peer, 0); // disconnect from server
 

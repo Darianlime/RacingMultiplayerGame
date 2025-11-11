@@ -22,6 +22,12 @@ typedef enum {
 	NONE, W, S, A, D, SPACE
 } KeyInput;
 
+enum PacketType {
+	NEW_CLIENT_PACKET,
+	CAR_PACKET,
+	CAR_PHYSICS_PACKET
+};
+
 struct InputState {
 	bool W = false;
 	bool S = false;
@@ -30,7 +36,12 @@ struct InputState {
 	bool Space = false;
 };
 
+struct PacketHeader {
+	uint8_t type;
+};
+
 struct CarPacket {
+	PacketHeader packetType;
 	int parseType;
 	int id;
 	glm::vec3 pos;
@@ -39,13 +50,14 @@ struct CarPacket {
 };
 
 struct CarPhysicsPacket {
-	std::vector<glm::vec3> worldVerts;
-	PhysicsType type;
+	PacketHeader packetType;
+	int parseType;
+	int id;
+	glm::vec3 worldVerts[Quad::noVertices];
 };
 
 struct Car {
 	Quad transform;
-	PhysicsType type;
 
 	float velocity;
 	float accel;
@@ -147,17 +159,21 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 	} 
 	case 4: // create car packet for new car and broadcast to other clients
 	{
+
 		char img[80] = { '\0' };
 		sscanf_s(data, "4|%79[^\n]", img, (unsigned)sizeof(img));
 		printf("%s", img);
-		CarPacket packet = { 3, id, glm::vec3(0.0f), 0, "" };
+		CarPacket packet = { PacketType::CAR_PACKET, 2, id, glm::vec3(0.0f), 0, "" };
 		strcpy_s(packet.assetImage, sizeof(packet.assetImage), img);
 		BroadcastPacket(server, packet);
+
+		//===== MAKE SURE TO CREATE AFTER ====
+		client_map[id]->CreateCar();
 		client_map[id]->GetCar()->assetImage = img;
 
 		for (auto const& [id, client] : client_map) {
 			Car* car = client->GetCar();
-			CarPacket packet = { 2, id, car->getTransform().pos, car->getTransform().rot, ""};
+			CarPacket packet = { PacketType::CAR_PACKET, 2, id, car->getTransform().pos, car->getTransform().rot, ""};
 			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 			SendPacket(peer, packet);
 		}
@@ -167,13 +183,22 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 }
 
 void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPacket* data) {
-	printf("ParseType: %d\n", data->parseType);
+	//printf("ParseType: %d\n", data->parseType);
+	//switch (data->parseType) {
+	//case 1:
+	//	//printf("parsing car packet id: %d\n", id);
+	//	CarPacket packet = { 2, id, data->pos, data->rot, "" };
+	//	strcpy_s(packet.assetImage, sizeof(packet.assetImage), data->assetImage);
+	//	BroadcastPacket(server, packet);
+	//	break;
+	//}
+}
+
+void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPhysicsPacket* data) {
 	switch (data->parseType) {
 	case 1:
 		//printf("parsing car packet id: %d\n", id);
-		CarPacket packet = { 2, id, data->pos, data->rot, "" };
-		strcpy_s(packet.assetImage, sizeof(packet.assetImage), data->assetImage);
-		BroadcastPacket(server, packet);
+		client_map[id]->GetCar()->getTransform().worldVerts.assign(data->worldVerts, data->worldVerts + Quad::noVertices);
 		break;
 	}
 }
@@ -181,42 +206,49 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPacket* data) {
 void PhysicsUpdate(double fixedDeltaTime) {
 	for (auto& [id, client] : client_map) {
 		Car* car = client->GetCar();
-		InputState& inputState = client_map[id]->GetInputState();
-		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
-		if (inputState.W) {
-			car->accel = car->maxSpeed;
+		if (car != nullptr) {
+			InputState& inputState = client_map[id]->GetInputState();
+			//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
+			if (inputState.W) {
+				car->accel = car->maxSpeed;
+			}
+			else if (inputState.S) {
+				car->accel = car->minSpeed;
+			}
+			else {
+				car->accel = 0.0;
+			}
+			car->velocity += car->accel * fixedDeltaTime;
+			float drag = 500.0f + 0.3f * glm::abs(car->velocity);
+			if (car->velocity > 0.0f)
+				car->velocity -= drag * fixedDeltaTime;
+			else if (car->velocity < 0.0f)
+				car->velocity += drag * fixedDeltaTime;
+			car->velocity = glm::clamp(car->velocity, car->minSpeed, car->maxSpeed);
+			//printf("Velocity: %.2f\n", client_map[id]->GetCar()->velocity);
+			glm::vec3 forward = car->getForwardDirection();
+			forward = glm::normalize(forward);
+			car->getTransform().pos += forward * (car->velocity * (float)fixedDeltaTime);
+			//printf("x: %.2f, y: %.2f\n", client_map[id]->GetCar()->pos.x, client_map[id]->GetCar()->pos.y);
+			car->currentAngle = -car->forwardRot;
+			//zero out inputs
+			memset(&inputState, 0, sizeof(struct InputState));
+			//std::cout << "end " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 		}
-		else if (inputState.S) {
-			car->accel = car->minSpeed;
-		}
-		else {
-			car->accel = 0.0;
-		}
-		car->velocity += car->accel * fixedDeltaTime;
-		float drag = 500.0f + 0.3f * glm::abs(car->velocity);
-		if (car->velocity > 0.0f)
-			car->velocity -= drag * fixedDeltaTime;
-		else if (car->velocity < 0.0f)
-			car->velocity += drag * fixedDeltaTime;
-		car->velocity = glm::clamp(car->velocity, car->minSpeed, car->maxSpeed);
-		//printf("Velocity: %.2f\n", client_map[id]->GetCar()->velocity);
-		glm::vec3 forward = car->getForwardDirection();
-		forward = glm::normalize(forward);
-		car->getTransform().pos += forward * (car->velocity * (float)fixedDeltaTime);
-		//printf("x: %.2f, y: %.2f\n", client_map[id]->GetCar()->pos.x, client_map[id]->GetCar()->pos.y);
-		car->currentAngle = -car->forwardRot;
-		//zero out inputs
-		memset(&inputState, 0, sizeof(struct InputState));
-		//std::cout << "end " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 	}
 	//==== COLLISION HANDLER ===============================================
-	/*for (auto& [id, client] : client_map) {
-		Car* car1 = client->GetCar();
-		for (auto& [id, client] : client_map) {
-			Car* car2 = client->GetCar();
-			bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+	for (auto& [id1, client1] : client_map) {
+		Car* car1 = client1->GetCar();
+		for (auto& [id2, client2] : client_map) {
+			if (id1 == id2) {
+				continue;
+			}
+			Car* car2 = client2->GetCar();
+			if (car1 != nullptr && car2 != nullptr) {
+				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+			}
 		}
-	}*/
+	}
 }
 
 int main(int argc, char** argv) {
@@ -240,7 +272,9 @@ int main(int argc, char** argv) {
 	}
 	std::cout << "Server started on port " << address.port << std::endl;
 
-	const double fixedHertz = 1.0 / 60.0; // 60 ticks per sec 
+	const double FIXED_HERTZ = 1.0 / 60.0; // 60 ticks per sec 
+	const auto TICK_DURATION = std::chrono::duration<double>(FIXED_HERTZ);
+
 	steady_clock::time_point lastTime = high_resolution_clock::now();
 	double atHertz = 0.0;
 
@@ -249,7 +283,7 @@ int main(int argc, char** argv) {
 	while (true) {
 		steady_clock::time_point currentTime = high_resolution_clock::now();
 		double deltaTime = duration_cast<duration<double>>(currentTime - lastTime).count();
-		lastTime = high_resolution_clock::now();
+		lastTime = currentTime;
 		atHertz += deltaTime;
 		// wait up to 1000 milliseconds for an event
 		while (enet_host_service(server, &event, 0) > 0) {
@@ -270,7 +304,6 @@ int main(int argc, char** argv) {
 				// new client 
 				new_client_id++;
 				client_map[new_client_id] = new ClientData(new_client_id);
-				client_map[new_client_id]->CreateCar();
 				event.peer->data = client_map[new_client_id]; // store client ID as peer data
 
 				// 3 new id
@@ -286,13 +319,22 @@ int main(int argc, char** argv) {
 				//	<< (char*)event.packet->data << " with peer address " << event.peer->address.host << " and port " << event.peer->address.port
 				//	<< " on channel " << (int)event.channelID << "." << std::endl;
 				//std::cout << "receiving data " << std::endl;
-				if (event.packet->dataLength == sizeof(CarPacket)) {
-					//std::cout << "parsing Car packet " << std::endl;
-					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPacket*>(event.packet->data));
+				uint8_t header = reinterpret_cast<PacketHeader*>(event.packet->data)->type;
+				switch (header)
+				{
+				case PacketType::CAR_PHYSICS_PACKET:
+				{
+					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPhysicsPacket*>(event.packet->data));
+					break;
 				}
-				else {
-					//std::cout << "parsing event packet " << std::endl;
+				case PacketType::CAR_PACKET:
+				{
+					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPacket*>(event.packet->data));
+					break;
+				}
+				default:
 					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), (char*)event.packet->data);
+					break;
 				}
 				enet_packet_destroy(event.packet); // clean up the packet now that we're done using it
 		
@@ -313,20 +355,32 @@ int main(int argc, char** argv) {
 		}
 
 		// physics update
-		while (atHertz >= fixedHertz) {
-			PhysicsUpdate(fixedHertz);
-			atHertz -= fixedHertz;
+		while (atHertz >= FIXED_HERTZ) {
+			PhysicsUpdate(FIXED_HERTZ);
+
+			// send updated transform to clients
+			for (auto const& [id, client] : client_map) {
+				Car* car = client->GetCar();
+				if (!car) {
+					continue;
+				}
+				CarPacket packet;
+				packet.packetType.type = PacketType::CAR_PACKET;
+				packet.parseType = 1;
+				packet.id = id;
+				packet.pos = car->getTransform().pos;
+				packet.rot = car->getTransform().rot;
+				strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
+				BroadcastPacket(server, packet);
+			}
+
+			atHertz -= FIXED_HERTZ;
 		}
 
-		// send updated transform to clients
-		for (auto const& [id, client] : client_map) {
-			Car* car = client->GetCar();
-			CarPacket packet = { 1, id, car->getTransform().pos, car->getTransform().rot, ""};
-			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
-			BroadcastPacket(server, packet);
+		auto elapsed = high_resolution_clock::now() - currentTime;
+		if (elapsed < TICK_DURATION) {
+			sleep_for(TICK_DURATION - elapsed);
 		}
-
-		sleep_for(std::chrono::milliseconds(1));
 	}
 	// GAME LOOP END
 	enet_host_destroy(server); // destroy the server host
