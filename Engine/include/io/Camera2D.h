@@ -1,23 +1,20 @@
-#ifndef CAMERA_H
-#define CAMERA_H
+#ifndef CAMERA2D_H
+#define CAMERA2D_H
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace Engine {
-	enum class CameraDirection {
+	enum class Camera2dDirection {
 		NONE = 0,
-		FORWARD,
-		BACKWARD,
 		LEFT,
 		RIGHT,
 		UP,
 		DOWN
 	};
 
-	class Camera {
+	class Camera2D {
 	private:
-		void updateCameraVectors();
 
 	public:
 		glm::vec3 cameraPos;
@@ -28,16 +25,17 @@ namespace Engine {
 
 		glm::vec3 worldUp;
 
-		float yaw;
-		float pitch;
+		float roll;
 		float speed;
 		float sensitivity;
 		float zoom;
 
-		Camera(glm::vec3 postion);
+		Camera2D(glm::vec3 postion);
 
-		void updateCameraDirection(float dx, float dy);
-		void updateCameraPos(CameraDirection dir, double dt);
+		void followTarget(glm::vec3 targetPos);
+		void updateCameraVectors();
+		void updateCameraDirection(float dz);
+		void updateCameraPos(Camera2dDirection dir, double dt);
 		void updateCameraZoom(double dy);
 
 		float getZoom();
@@ -46,4 +44,4 @@ namespace Engine {
 
 	};
 }
-#endif // !CAMERA_H
+#endif // !CAMERA2D_H

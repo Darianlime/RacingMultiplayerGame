@@ -4,12 +4,14 @@ namespace Engine {
 	CarRenderer::CarRenderer() {
 		transform = Quad(DYNAMIC);
 		transform.init();
+		currentAngle = 0.0f;
 		assetImage = NULL;
 	}
 
 	CarRenderer::CarRenderer(const char* imageName) {
 		transform = Quad({ imageName }, DYNAMIC);
 		transform.init();
+		currentAngle = 0.0f;
 		assetImage = imageName;
 	}
 
@@ -17,6 +19,7 @@ namespace Engine {
 		transform = Quad({ imageName }, DYNAMIC);
 		transform.init();
 		transform.pos = pos;
+		currentAngle = 0.0f;
 		assetImage = imageName;
 	}
 

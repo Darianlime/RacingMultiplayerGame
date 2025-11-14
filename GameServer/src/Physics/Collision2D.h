@@ -13,6 +13,7 @@ private:
 public:
 	Collision2D();
 
+	bool testAxis(glm::vec3& axis);
 	static bool checkOBBCollision(Quad& q1, Quad& q2);
 	static bool checkOBBCollisionResolve(Quad& q1, Quad& q2);
 };

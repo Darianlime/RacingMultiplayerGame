@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Camera.cpp" />
+    <ClCompile Include="src\Camera2D.cpp" />
     <ClCompile Include="src\Car.cpp" />
     <ClCompile Include="src\CarRenderer.cpp" />
     <ClCompile Include="src\glad.c" />
@@ -43,7 +43,7 @@
     <ClInclude Include="include\graphics\Shader.h" />
     <ClInclude Include="include\graphics\Text.h" />
     <ClInclude Include="include\graphics\Texture.h" />
-    <ClInclude Include="include\io\Camera.h" />
+    <ClInclude Include="include\io\Camera2D.h" />
     <ClInclude Include="include\io\Joystick.h" />
     <ClInclude Include="include\io\Keyboard.h" />
     <ClInclude Include="include\io\Mouse.h" />

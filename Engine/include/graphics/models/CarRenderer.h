@@ -12,6 +12,7 @@ namespace Engine {
 	private:
 		// car model
 		Quad transform;
+		float currentAngle;
 		const char* assetImage;
 	public:
 		CarRenderer();
@@ -19,6 +20,8 @@ namespace Engine {
 		CarRenderer(glm::vec3 pos, const char* imageName);
 
 		Quad& getTransform() { return transform; }
+		float getCurrentAngle() { return currentAngle; }
+		void setCurrentAngle(float angle) { currentAngle = angle; }
 		const char* getImage() { return assetImage; }
 
 		void render(Shader shader);
