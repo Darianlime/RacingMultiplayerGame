@@ -16,6 +16,7 @@
 #include "Models/Quad.hpp"
 #include <string.h>
 #include <cstdint>
+#include <deque>
 
 using namespace std::chrono;
 using namespace std::this_thread;
@@ -23,6 +24,9 @@ using namespace std::this_thread;
 constexpr float SERVER_TICK_RATE = 64.0f;
 constexpr uint8_t CHANNEL_UNSEQUENCED = 0;
 constexpr uint8_t CHANNEL_RELIABLE = 1;
+constexpr uint8_t HISTORY_SIZE = 200;
+
+uint64_t currentServerTick = 0;
 
 typedef enum {
 	W, S, A, D, SPACE
@@ -30,6 +34,7 @@ typedef enum {
 
 enum PacketType {
 	NEW_CLIENT_PACKET,
+	INPUT_PACKET,
 	CAR_PACKET,
 	CAR_PHYSICS_PACKET
 };
@@ -40,26 +45,55 @@ struct InputState {
 	bool A = false;
 	bool D = false;
 	bool Space = false;
+	uint64_t currentTick;
 };
 
 struct PacketHeader {
-	uint8_t type;
-};
-
-struct CarPacket {
-	PacketHeader packetType;
+	uint8_t packetType;
+	uint64_t currentTick;
 	int parseType;
 	int id;
+};
+
+struct StateHistoryPacket {
+	uint64_t serverTick;
+	InputState inputState;
 	glm::vec3 pos;
 	float rot;
 	float currentAngle;
+};
+
+struct ClientDataPacket {
+	PacketHeader packetHeader;
+	char username[28];
+};
+
+struct InputPacket {
+	PacketHeader packetHeader;
+	InputState inputs;
+};
+
+struct CarPacket {
+	PacketHeader packetHeader;
+	glm::vec3 pos;
+	float rot;
+	float currentAngle;
+	float velocity;
+	float forwardRot;
+};
+
+struct CarPacketImage {
+	PacketHeader packetHeader;
+	glm::vec3 pos;
+	float rot;
+	float currentAngle;
+	float velocity;
+	float forwardRot;
 	char assetImage[80];
 };
 
 struct CarPhysicsPacket {
-	PacketHeader packetType;
-	int parseType;
-	int id;
+	PacketHeader packetHeader;
 	glm::vec3 worldVerts[Quad::noVertices];
 };
 
@@ -91,9 +125,11 @@ private:
 	int m_id;
 	std::string username;
 	std::unique_ptr<Car> car;
-	InputState inputState;
 public:
 	bool ready = false;
+	std::map<uint64_t, InputState> inputStateHistory;
+	std::deque<StateHistoryPacket> statePacketHistory;
+	InputState lastKnownInput;
 
 	ClientData(int id) : m_id(id) {}
 
@@ -101,7 +137,9 @@ public:
 	void CreateCar() { car = std::make_unique<Car>(); }
 
 	Car* GetCar() const { return car.get(); }
-	InputState& GetInputState() { return inputState; }
+	InputState& GetInputState(int index) { return inputStateHistory[index]; }
+	StateHistoryPacket& GetStateHistory(int index) { return statePacketHistory[index % HISTORY_SIZE]; }
+	void SetStateHistory(StateHistoryPacket packet, int index) { statePacketHistory[index % HISTORY_SIZE] = packet; }
 
 	int GetID() const { return m_id; }
 	const std::string& GetUsername() const { return username; }
@@ -119,6 +157,16 @@ void BroadcastPacketReliable(ENetHost* server, CarPacket data) {
 	enet_host_broadcast(server, CHANNEL_RELIABLE, packet); // broadcast packet on channel 0
 }
 
+void BroadcastPacketReliable(ENetHost* server, CarPacketImage data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_host_broadcast(server, CHANNEL_RELIABLE, packet); // broadcast packet on channel 0
+}
+
+void BroadcastPacketReliable(ENetHost* server, ClientDataPacket data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_host_broadcast(server, CHANNEL_RELIABLE, packet); // broadcast packet on channel 0
+}
+
 void BroadcastPacketUnseq(ENetHost* server, CarPacket data) {
 	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNSEQUENCED);
 	enet_host_broadcast(server, CHANNEL_UNSEQUENCED, packet); // broadcast packet on channel 0
@@ -126,6 +174,16 @@ void BroadcastPacketUnseq(ENetHost* server, CarPacket data) {
 
 void SendPacketReliable(ENetPeer* peer, const char* data) {
 	ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
+	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 0
+}
+
+void SendPacketReliable(ENetPeer* peer, CarPacketImage data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 0
+}
+
+void SendPacketReliable(ENetPeer* peer, ClientDataPacket data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
 	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 0
 }
 
@@ -147,50 +205,39 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 	switch (data_type) {
 	case 2: // Get username from client
 	{
-		char username[80] = { '\0' };
-		sscanf_s(data, "2|%79[^\n]", &username, (unsigned)80);
+		char username[28] = { '\0' };
+		sscanf_s(data, "2|%28[^\n]", &username, (unsigned)28);
 
-		char send_data[1024] = { '\0' };
-		sprintf_s(send_data, sizeof(send_data), "2|%d|%s", id, username);
-		std::cout << "Broadcasting: " << send_data << std::endl;
+		ClientDataPacket data = {NEW_CLIENT_PACKET, 0, 1, id, ""};
+		strcpy_s(data.username, sizeof(data.username), username);
 
-		BroadcastPacketReliable(server, send_data);
+		std::cout << "Broadcasting: " << data.username << std::endl;
+
+		BroadcastPacketReliable(server, data);
 		client_map[id]->SetUsername(username);
 		break;
 	}
-	case 3: // process input update physics
-	{
-		uint8_t input = 0;
-		sscanf_s(data, "3|%hhu", &input);
-		//std::cout << "Input Sent by " << input << peer->address.host << peer->address.port << std::endl;
-		InputState& inputState = client_map[id]->GetInputState();
-		inputState.W = input & (1 << KeyInput::W);
-		inputState.S = input & (1 << KeyInput::S);
-		inputState.A = input & (1 << KeyInput::A);
-		inputState.D = input & (1 << KeyInput::D);
-		inputState.Space = input & (1 << KeyInput::SPACE);
-		break;
-	} 
 	case 4: // create car packet for new car and broadcast to other clients
 	{
+		ClientData* client = client_map[id];
 
 		char img[80] = { '\0' };
 		sscanf_s(data, "4|%79[^\n]", img, (unsigned)sizeof(img));
 
-		if (!client_map[id]->GetCar()) {
-			client_map[id]->CreateCar();
-			client_map[id]->GetCar()->assetImage = img;
+		if (!client->GetCar()) {
+			client->CreateCar();
+			client->GetCar()->assetImage = img;
 		}
 
 		printf("%s", img);
-		CarPacket packet = { PacketType::CAR_PACKET, 2, id, glm::vec3(0.0f), 0.0f, 0.0f, "" };
+		CarPacketImage packet = { PacketType::CAR_PACKET, 0, 2, id, glm::vec3(0.0f), 0.0f, 0.0f, 0.0f, 0.0f, ""};
 		strcpy_s(packet.assetImage, sizeof(packet.assetImage), img);
 		BroadcastPacketReliable(server, packet);
 
 		for (auto const& [other_id, client] : client_map) {
 			Car* car = client->GetCar();
 			if (!car || other_id == id) continue;
-			CarPacket packet = { PacketType::CAR_PACKET, 2, other_id, car->getTransform().pos, car->getTransform().rot, car->currentAngle, ""};
+			CarPacketImage packet = { PacketType::CAR_PACKET, 0, 2, other_id, car->getTransform().pos, car->getTransform().rot, car->currentAngle, car->velocity, car->forwardRot, ""};
 			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 			SendPacketReliable(peer, packet);
 		}
@@ -213,8 +260,30 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPacket* data) {
 	//}
 }
 
+void ParseData(ENetHost* server, ENetPeer* peer, int id, InputPacket* data) {
+	switch (data->packetHeader.parseType) {
+	case 1:
+		//printf("parsing car packet id: %d\n", id);
+		//client_map[id]->currentTick = data->packetHeader.currentTick;
+
+		InputState input = data->inputs;
+		if (input.currentTick > currentServerTick) {
+			client_map[id]->inputStateHistory[input.currentTick] = input;
+		}
+
+		//std::cout << "Input Sent by " << input << peer->address.host << peer->address.port << std::endl;
+	/*	InputState& inputState = client_map[id]->GetInputState(indexInput);
+		inputState.W = input.W;
+		inputState.S = input.S;
+		inputState.A = input.A;
+		inputState.D = input.D;
+		inputState.Space = input.Space;*/
+		break;
+	}
+}
+
 void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPhysicsPacket* data) {
-	switch (data->parseType) {
+	switch (data->packetHeader.parseType) {
 	case 1:
 		//printf("parsing car packet id: %d\n", id);
 		client_map[id]->GetCar()->getTransform().worldVerts.assign(data->worldVerts, data->worldVerts + Quad::noVertices);
@@ -226,7 +295,13 @@ void PhysicsUpdate(double fixedDeltaTime) {
 	for (auto& [id, client] : client_map) {
 		Car* car = client->GetCar();
 		if (car != nullptr) {
-			InputState& inputState = client_map[id]->GetInputState();
+			InputState inputState;
+			if (client_map[id]->inputStateHistory.count(currentServerTick) < 1) {
+				inputState = client_map[id]->inputStateHistory[client->lastKnownInput.currentTick];
+			}
+			else {
+				inputState = client_map[id]->inputStateHistory[currentServerTick];
+			}
 			//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 			if (inputState.W) {
 				car->accel = car->maxSpeed;
@@ -265,21 +340,21 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			forward = glm::normalize(forward);
 			car->getTransform().pos += forward * car->velocity * (float)fixedDeltaTime;
 			car->currentAngle = -car->forwardRot;
-
 			//zero out inputs
-			memset(&inputState, 0, sizeof(struct InputState));
+			//memset(&inputState, 0, sizeof(struct InputState));
+			// STORE HISTORY OF EACH POSITION
 		}
-	}
-	//==== COLLISION HANDLER ===============================================
-	for (auto& [id1, client1] : client_map) {
-		Car* car1 = client1->GetCar();
-		for (auto& [id2, client2] : client_map) {
-			if (id1 == id2) {
-				continue;
-			}
-			Car* car2 = client2->GetCar();
-			if (car1 != nullptr && car2 != nullptr) {
-				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+
+		for (auto& [id1, client1] : client_map) {
+			Car* car1 = client1->GetCar();
+			for (auto& [id2, client2] : client_map) {
+				if (id1 == id2) {
+					continue;
+				}
+				Car* car2 = client2->GetCar();
+				if (car1 != nullptr && car2 != nullptr) {
+					bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+				}
 			}
 		}
 	}
@@ -311,7 +386,6 @@ int main(int argc, char** argv) {
 
 	steady_clock::time_point lastTime = high_resolution_clock::now();
 	double atHertz = 0.0;
-	uint8_t currentTick = 0;
 
 	// GAME LOOP START
 	int new_client_id = 0;
@@ -331,11 +405,12 @@ int main(int argc, char** argv) {
 
 				for (auto const& pair : client_map) {
 					if (pair.second->GetCar() == nullptr) continue;
-					char send_data[1024] = { '\0' };
-					sprintf_s(send_data, sizeof(send_data), "2|%d|%s", pair.first, pair.second->GetUsername().c_str());
+
+					ClientDataPacket data = { NEW_CLIENT_PACKET, 0, 1, pair.first, ""};
+					strcpy_s(data.username, sizeof(data.username), pair.second->GetUsername().c_str());
 					/*ENetPacket* packet = enet_packet_create(send_data, strlen(send_data) + 1, ENET_PACKET_FLAG_RELIABLE);
 					enet_peer_send(event.peer, 0, packet);*/
-					SendPacketReliable(event.peer, send_data);
+					SendPacketReliable(event.peer, data);
 				}
 
 				// new client 
@@ -344,9 +419,8 @@ int main(int argc, char** argv) {
 				event.peer->data = client_map[new_client_id]; // store client ID as peer data
 
 				// 3 new id
-				char data_to_send[126] = { '\0' };
-				sprintf_s(data_to_send, sizeof(data_to_send), "3|%d", new_client_id);
-				SendPacketReliable(event.peer, data_to_send);
+				ClientDataPacket header = { NEW_CLIENT_PACKET, currentServerTick, 2, new_client_id, ""};
+				SendPacketReliable(event.peer, header);
 				enet_host_flush(server);
 				break;
 			}
@@ -356,9 +430,14 @@ int main(int argc, char** argv) {
 				//	<< (char*)event.packet->data << " with peer address " << event.peer->address.host << " and port " << event.peer->address.port
 				//	<< " on channel " << (int)event.channelID << "." << std::endl;
 				//std::cout << "receiving data " << std::endl;
-				uint8_t header = reinterpret_cast<PacketHeader*>(event.packet->data)->type;
+				uint8_t header = reinterpret_cast<PacketHeader*>(event.packet->data)->packetType;
 				switch (header)
 				{
+				case PacketType::INPUT_PACKET:
+				{
+					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<InputPacket*>(event.packet->data));
+					break;
+				}
 				case PacketType::CAR_PHYSICS_PACKET:
 				{
 					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPhysicsPacket*>(event.packet->data));
@@ -393,6 +472,8 @@ int main(int argc, char** argv) {
 
 		// physics update
 		while (atHertz >= FIXED_HERTZ) {
+			currentServerTick++;
+			//std::cout << "tick: " << currentServerTick << std::endl;
 			PhysicsUpdate(FIXED_HERTZ);
 
 			// send updated transform to clients
@@ -403,19 +484,21 @@ int main(int argc, char** argv) {
 				if (!car) {
 					continue;
 				}
-				CarPacket packet{};
-				packet.packetType.type = PacketType::CAR_PACKET;
-				packet.parseType = 1;
-				packet.id = id;
-				packet.pos = car->getTransform().pos;
-				packet.rot = car->getTransform().rot;
-				packet.currentAngle = car->currentAngle;
-				strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
+				//StateHistoryPacket statePacket = client->GetStateHistory(currentServerTick - 1);
+
+				CarPacket packet = { 
+					PacketType::CAR_PACKET, currentServerTick, 1, id,
+					car->getTransform().pos, car->getTransform().rot, car->currentAngle, car->velocity, car->forwardRot
+				};
+
+				//strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 				BroadcastPacketUnseq(server, packet);
+
+				client->lastKnownInput = client->GetInputState(currentServerTick);
+				client->inputStateHistory.erase(currentServerTick);
 			}
 
 			atHertz -= FIXED_HERTZ;
-			currentTick++;
 		}
 
 		enet_host_flush(server);

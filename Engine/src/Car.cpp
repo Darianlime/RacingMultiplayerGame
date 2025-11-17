@@ -32,6 +32,8 @@ namespace Engine {
 	Car::~Car() {
 	}
 
+
+
 	glm::vec3 Car::getForwardDirection() {
 		float angleRad = glm::radians(currentAngle - 90.0f);
 		return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));

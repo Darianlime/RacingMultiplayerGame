@@ -1,4 +1,5 @@
 #include "graphics/models/CarRenderer.h"
+#include <io/InputManager.h>
 
 namespace Engine {
 	CarRenderer::CarRenderer() {
@@ -23,12 +24,100 @@ namespace Engine {
 		assetImage = imageName;
 	}
 
-	//glm::vec3 Car::getForwardDirection() {
-	//	float angleRad = glm::radians(currentAngle - 90.0f);
-	//	return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
-	//}
+	void CarRenderer::PredictionPhysicsUpdate(InputState& inputState, double fixedDeltaTime) {
+		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
+		if (inputState.W) {
+			carProperties.accel = carProperties.maxSpeed;
+		}
+		else if (inputState.S) {
+			carProperties.accel = -2700.0f;
+		}
+		else {
+			carProperties.accel = 0.0;
+		}
+		carProperties.velocity += carProperties.accel * fixedDeltaTime;
+		float drag = 500.0f + 0.3f * glm::abs(carProperties.velocity);
+		if (carProperties.velocity > 0.0f)
+			carProperties.velocity -= drag * fixedDeltaTime;
+		else if (carProperties.velocity < 0.0f)
+			carProperties.velocity += drag * fixedDeltaTime;
+		carProperties.velocity = glm::clamp(carProperties.velocity, -2700.0f, carProperties.maxSpeed);
+
+		float turnRate = 100.0f;
+		float calcRot = glm::sign(carProperties.velocity) * turnRate * (float)fixedDeltaTime;
+
+		if (inputState.D && glm::abs(carProperties.velocity) > 100.0f) {
+			transform.rot -= calcRot;
+			carProperties.forwardRot -= calcRot;
+		}
+		if (inputState.A && glm::abs(carProperties.velocity) > 100.0f) {
+			transform.rot += calcRot;
+			carProperties.forwardRot += calcRot;
+		}
+		if (inputState.Space && (!((inputState.Space && inputState.D)) || !((inputState.Space && inputState.A)))) {
+			carProperties.velocity -= 100.0f * float(fixedDeltaTime);
+			if (carProperties.velocity < 0.0f) carProperties.velocity = 0.0f;
+		}
+
+		glm::vec3 forward = carProperties.getForwardDirection();
+		forward = glm::normalize(forward);
+		transform.pos += forward * carProperties.velocity * (float)fixedDeltaTime;
+		carProperties.currentAngle = -carProperties.forwardRot;
+	}
+
+	CarState CarRenderer::SimulatePhysicsUpdate(CarState state, InputState& inputState, double fixedDeltaTime) {
+		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
+		if (inputState.W) {
+			carProperties.accel = carProperties.maxSpeed;
+		}
+		else if (inputState.S) {
+			carProperties.accel = -2700.0f;
+		}
+		else {
+			carProperties.accel = 0.0;
+		}
+		state.velocity += carProperties.accel * fixedDeltaTime;
+		float drag = 500.0f + 0.3f * glm::abs(state.velocity);
+		if (state.velocity > 0.0f)
+			state.velocity -= drag * fixedDeltaTime;
+		else if (state.velocity < 0.0f)
+			state.velocity += drag * fixedDeltaTime;
+		state.velocity = glm::clamp(state.velocity, -2700.0f, carProperties.maxSpeed);
+
+		float turnRate = 100.0f;
+		float calcRot = glm::sign(state.velocity) * turnRate * (float)fixedDeltaTime;
+
+		if (inputState.D && glm::abs(state.velocity) > 100.0f) {
+			state.rot -= calcRot;
+			state.forwardRot -= calcRot;
+		}
+		if (inputState.A && glm::abs(state.velocity) > 100.0f) {
+			state.rot += calcRot;
+			state.forwardRot += calcRot;
+		}
+		if (inputState.Space && (!((inputState.Space && inputState.D)) || !((inputState.Space && inputState.A)))) {
+			state.velocity -= 100.0f * float(fixedDeltaTime);
+			if (state.velocity < 0.0f) state.velocity = 0.0f;
+		}
+
+		glm::vec3 forward = carProperties.getForwardDirectionSim(state.currentAngle);
+		forward = glm::normalize(forward);
+		state.pos += forward * state.velocity * (float)fixedDeltaTime;
+		state.currentAngle = -state.forwardRot;
+
+		return state;
+	}
+
+	void CarRenderer::pushCarHistory(int tick) {
+		CarState state = { transform.pos, transform.rot, carProperties.currentAngle, tick };
+		carStateHistory.push_back(state);
+	}
 
 	void CarRenderer::render(Shader shader) {
 		transform.render(shader);
+	}
+
+	void CarRenderer::render(Shader shader, glm::vec3 pos, float rot) {
+		transform.render(shader, pos, rot);
 	}
 }
