@@ -65,7 +65,7 @@ namespace Engine {
 		carProperties.currentAngle = -carProperties.forwardRot;
 	}
 
-	CarState CarRenderer::SimulatePhysicsUpdate(CarState state, InputState& inputState, double fixedDeltaTime) {
+	CarState CarRenderer::SimulatePhysicsUpdate(CarState& state, InputState& inputState, double fixedDeltaTime) {
 		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 		if (inputState.W) {
 			carProperties.accel = carProperties.maxSpeed;
@@ -108,10 +108,10 @@ namespace Engine {
 		return state;
 	}
 
-	void CarRenderer::pushCarHistory(int tick) {
+	/*void CarRenderer::pushCarHistory(int tick) {
 		CarState state = { transform.pos, transform.rot, carProperties.currentAngle, tick };
 		carStateHistory.push_back(state);
-	}
+	}*/
 
 	void CarRenderer::render(Shader shader) {
 		transform.render(shader);

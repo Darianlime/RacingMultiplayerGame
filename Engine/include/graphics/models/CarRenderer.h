@@ -7,17 +7,12 @@
 
 #include "Quad.hpp"
 #include "io/InputManager.h"
+#include "Physics/Collision2D.h"
+#include "Shared/CarState.h"
+
+using namespace NetWork;
 
 namespace Engine {
-	struct CarState {
-		glm::vec3 pos;
-		float rot;
-		float currentAngle;
-		float velocity;
-		float forwardRot;
-		int tick;
-	};
-
 	struct CarProperties {
 		float minSpeed;
 		float maxSpeed;
@@ -58,15 +53,14 @@ namespace Engine {
 		float currentAngle;
 		const char* assetImage;
 	public:
-		std::deque<CarState> carStateHistory;
 
 		CarRenderer();
 		CarRenderer(const char* imageName);
 		CarRenderer(glm::vec3 pos, const char* imageName);
 
 		void PredictionPhysicsUpdate(InputState& inputState, double fixedDeltaTime);
-		CarState SimulatePhysicsUpdate(CarState state, InputState& inputState, double fixedDeltaTime);
-		void pushCarHistory(int tick);
+		CarState SimulatePhysicsUpdate(CarState& state, InputState& inputState, double fixedDeltaTime);
+		//void pushCarHistory(int tick);
 		Quad& getTransform() { return transform; }
 		CarProperties& getProperties() { return carProperties; }
 		float getCurrentAngle() { return currentAngle; }

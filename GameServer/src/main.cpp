@@ -73,8 +73,7 @@ struct InputPacket {
 	InputState inputs;
 };
 
-struct CarPacket {
-	PacketHeader packetHeader;
+struct CarState {
 	glm::vec3 pos;
 	float rot;
 	float currentAngle;
@@ -82,13 +81,14 @@ struct CarPacket {
 	float forwardRot;
 };
 
+struct CarPacket {
+	PacketHeader packetHeader;
+	CarState carState;
+};
+
 struct CarPacketImage {
 	PacketHeader packetHeader;
-	glm::vec3 pos;
-	float rot;
-	float currentAngle;
-	float velocity;
-	float forwardRot;
+	CarState carState;
 	char assetImage[80];
 };
 
@@ -340,21 +340,17 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			forward = glm::normalize(forward);
 			car->getTransform().pos += forward * car->velocity * (float)fixedDeltaTime;
 			car->currentAngle = -car->forwardRot;
-			//zero out inputs
-			//memset(&inputState, 0, sizeof(struct InputState));
-			// STORE HISTORY OF EACH POSITION
 		}
-
-		for (auto& [id1, client1] : client_map) {
-			Car* car1 = client1->GetCar();
-			for (auto& [id2, client2] : client_map) {
-				if (id1 == id2) {
-					continue;
-				}
-				Car* car2 = client2->GetCar();
-				if (car1 != nullptr && car2 != nullptr) {
-					bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
-				}
+	}
+	for (auto& [id1, client1] : client_map) {
+		Car* car1 = client1->GetCar();
+		for (auto& [id2, client2] : client_map) {
+			if (id1 == id2) {
+				continue;
+			}
+			Car* car2 = client2->GetCar();
+			if (car1 != nullptr && car2 != nullptr) {
+				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
 			}
 		}
 	}

@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Collision2D.cpp" />
     <ClCompile Include="src\Camera2D.cpp" />
     <ClCompile Include="src\Car.cpp" />
     <ClCompile Include="src\CarRenderer.cpp" />
@@ -50,6 +51,8 @@
     <ClInclude Include="include\io\Keyboard.h" />
     <ClInclude Include="include\io\Mouse.h" />
     <ClInclude Include="include\io\Screen.h" />
+    <ClInclude Include="include\Physics\Collision2D.h" />
+    <ClInclude Include="include\Shared\CarState.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

@@ -99,3 +99,4 @@ bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2) {
 
 	return true;
 }
+

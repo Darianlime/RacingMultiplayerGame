@@ -29,7 +29,9 @@
 #include "graphics/models/Quad.hpp"
 #include "graphics/Text.h"
 
+#include "Shared/CarState.h"
 
+using namespace NetWork;
 using namespace Engine;
 using namespace std::chrono;
 using namespace std::this_thread;
@@ -110,10 +112,11 @@ private:
 public:
 	uint64_t currentTick = 0;
 	uint64_t lastServerTick = 0;
-	CarState serverCarState = {};
+	CarState serverCarState;
 	bool recivedServerData = false;
 
 	ClientData(int id) : m_id(id) {
+		serverCarState = {};
 		inputs = std::make_unique<InputManager>();
 	}
 
@@ -213,14 +216,15 @@ void ParseCarData(CarPacket* data, double fixedDeltaTime) {
 					InputState inputState = clientData->GetInputs()->GetInputStateHistory(i);
 					newCarState = clientData->GetCar()->SimulatePhysicsUpdate(newCarState, inputState, fixedDeltaTime);
 				}
-				CarRenderer* car = clientData->GetCar();
+				/*CarRenderer* car = clientData->GetCar();
 				car->getTransform().pos = newCarState.pos;
 				car->getTransform().rot = newCarState.rot;
 				car->getProperties().currentAngle = newCarState.currentAngle;
 				car->getProperties().velocity = newCarState.velocity;
-				car->getProperties().forwardRot = newCarState.forwardRot;
+				car->getProperties().forwardRot = newCarState.forwardRot;*/
 				client_map[id]->serverCarState = newCarState;
-				std::cout << "1. " << car->getProperties().currentAngle << " " << car->getProperties().velocity << " " << car->getProperties().forwardRot << std::endl;
+
+				//std::cout << "1. " << car->getProperties().currentAngle << " " << car->getProperties().velocity << " " << car->getProperties().forwardRot << std::endl;
 
 				client_map[id]->lastServerTick = serverTick;
 			}
@@ -380,12 +384,22 @@ int main(int argc, char **argv) {
 
 				// Proccess Prediction Update 
 				//clientData->GetCar()->PredictionPhysicsUpdate(inputs, fixedDeltaTime);
-				clientData->serverCarState = clientData->GetCar()->SimulatePhysicsUpdate(clientData->serverCarState, inputs, fixedDeltaTime);
-				clientData->GetCar()->getTransform().pos = clientData->serverCarState.pos;
+				clientData->GetCar()->SimulatePhysicsUpdate(clientData->serverCarState, inputs, fixedDeltaTime);
+				CarRenderer* car1 = clientData->GetCar();
+				for (auto& [id2, client2] : client_map) {
+					if (clientData->GetID() == id2) {
+						continue;
+					}
+					CarRenderer* car2 = client2->GetCar();
+					if (car1 != nullptr && car2 != nullptr) {
+						bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), clientData->serverCarState, car2->getTransform(), client2->serverCarState);
+					}
+				}
+				/*clientData->GetCar()->getTransform().pos = clientData->serverCarState.pos;
 				clientData->GetCar()->getTransform().rot = clientData->serverCarState.rot;
 				clientData->GetCar()->getProperties().currentAngle = clientData->serverCarState.currentAngle;
 				clientData->GetCar()->getProperties().velocity = clientData->serverCarState.velocity;
-				clientData->GetCar()->getProperties().forwardRot = clientData->serverCarState.forwardRot;
+				clientData->GetCar()->getProperties().forwardRot = clientData->serverCarState.forwardRot;*/
 
 				InputPacket inputPacket = { INPUT_PACKET, clientData->currentTick, 1, CLIENT_ID, inputs };
 				SendPacketUnseq(peer, inputPacket);
