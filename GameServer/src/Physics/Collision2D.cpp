@@ -39,7 +39,7 @@ bool Collision2D::checkOBBCollision(Quad& q1, Quad& q2) {
 	return true;
 }
 
-bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2) {
+bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2, float fixedDeltaTime) {
 	Quad* quad1 = &q1;
 	Quad* quad2 = &q2;
 

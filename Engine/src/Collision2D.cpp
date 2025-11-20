@@ -101,7 +101,7 @@ namespace Engine {
 		return true;
 	}
 
-	bool Collision2D::checkOBBCollisionResolve(Quad& q1, CarState& carState1, Quad& q2, CarState& carState2) {
+	bool Collision2D::checkOBBCollisionResolve(Quad& q1, CarState& carState1, Quad& q2, CarState& carState2, float fixedDeltaTime) {
 		Quad* quad1 = &q1;
 		Quad* quad2 = &q2;
 
@@ -151,14 +151,14 @@ namespace Engine {
 
 		// =====SEND PACKETS BACK TO AFFECTED QUAD=====
 		if (q1.physicsType == STATIC && q2.physicsType == DYNAMIC) {
-			carState2.pos += glm::vec3(correction, 0.0f);
+			//carState2.pos += glm::vec3(correction, 0.0f) * fixedDeltaTime;
 		}
 		else if (q1.physicsType == DYNAMIC && q2.physicsType == STATIC) {
-			carState1.pos -= glm::vec3(correction, 0.0f);
+			carState1.pos -= glm::vec3(correction, 0.0f) * fixedDeltaTime;
 		}
 		else if (q1.physicsType == DYNAMIC && q2.physicsType == DYNAMIC) {
-			carState1.pos -= glm::vec3(correction * 0.5f, 0.0f);
-			carState2.pos += glm::vec3(correction * 0.5f, 0.0f);
+			carState1.pos -= glm::vec3(correction * 0.5f, 0.0f) * fixedDeltaTime;
+			//carState2.pos += glm::vec3(correction * 0.5f, 0.0f) * fixedDeltaTime;
 		}
 
 		return true;

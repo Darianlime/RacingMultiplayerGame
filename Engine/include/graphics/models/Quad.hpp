@@ -76,6 +76,7 @@ namespace Engine {
             model = glm::translate(model, pos);
             model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
             model = glm::scale(model, glm::vec3(textures[0].getWidth(), textures[0].getHeight(), 1.0f) * size);
+            //std::cout << "width " << textures[0].getWidth() << " Hiehgt " << textures[0].getHeight() << std::endl;
             //model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
             shader.setMat4("model", model);
             for (int i = 0; i < 4; i++) {

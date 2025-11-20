@@ -282,14 +282,14 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, InputPacket* data) {
 	}
 }
 
-void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPhysicsPacket* data) {
-	switch (data->packetHeader.parseType) {
-	case 1:
-		//printf("parsing car packet id: %d\n", id);
-		client_map[id]->GetCar()->getTransform().worldVerts.assign(data->worldVerts, data->worldVerts + Quad::noVertices);
-		break;
-	}
-}
+//void ParseData(ENetHost* server, ENetPeer* peer, int id, CarPhysicsPacket* data) {
+//	switch (data->packetHeader.parseType) {
+//	case 1:
+//		//printf("parsing car packet id: %d\n", id);
+//		client_map[id]->GetCar()->getTransform().worldVerts.assign(data->worldVerts, data->worldVerts + Quad::noVertices);
+//		break;
+//	}
+//}
 
 void PhysicsUpdate(double fixedDeltaTime) {
 	for (auto& [id, client] : client_map) {
@@ -342,6 +342,7 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			car->currentAngle = -car->forwardRot;
 		}
 	}
+
 	for (auto& [id1, client1] : client_map) {
 		Car* car1 = client1->GetCar();
 		for (auto& [id2, client2] : client_map) {
@@ -350,7 +351,7 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			}
 			Car* car2 = client2->GetCar();
 			if (car1 != nullptr && car2 != nullptr) {
-				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform());
+				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform(), fixedDeltaTime);
 			}
 		}
 	}
@@ -436,7 +437,7 @@ int main(int argc, char** argv) {
 				}
 				case PacketType::CAR_PHYSICS_PACKET:
 				{
-					ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPhysicsPacket*>(event.packet->data));
+					//ParseData(server, event.peer, static_cast<ClientData*>(event.peer->data)->GetID(), reinterpret_cast<CarPhysicsPacket*>(event.packet->data));
 					break;
 				}
 				case PacketType::CAR_PACKET:
@@ -486,6 +487,8 @@ int main(int argc, char** argv) {
 					PacketType::CAR_PACKET, currentServerTick, 1, id,
 					car->getTransform().pos, car->getTransform().rot, car->currentAngle, car->velocity, car->forwardRot
 				};
+
+				client->GetCar()->getTransform().calculateWorldVerts(car->getTransform().pos, car->getTransform().rot);
 
 				//strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
 				BroadcastPacketUnseq(server, packet);
