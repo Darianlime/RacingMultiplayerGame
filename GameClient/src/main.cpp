@@ -30,9 +30,9 @@
 #include "graphics/Text.h"
 #include "graphics/models/RaceTrackRender.h"
 
-#include "Shared/CarState.h"
+#include "Network/Packets.h"
 
-using namespace NetWork;
+using namespace NetworkClient;
 using namespace Engine;
 using namespace std::chrono;
 using namespace std::this_thread;
@@ -42,57 +42,12 @@ constexpr float PREDICTION_TICK_RATE = 64.0f;
 constexpr uint8_t INTERPOLATE_TICKS = 1;
 constexpr uint8_t HISTORY_SNAPSHOTS = 100;
 
-constexpr uint8_t CHANNEL_UNSEQUENCED = 0;
-constexpr uint8_t CHANNEL_RELIABLE = 1;
-
 static Screen screen(1270, 720);
 static Joystick mainJ(0);
 static std::atomic<bool> connected = false;
 static std::atomic<bool> isProcessingShaders = false;
 static std::vector<uint8_t> worldMapTiles;
 static int CLIENT_ID = -1; // unique client ID assigned by server
-
-struct PacketHeader {
-	uint8_t packetType;
-	uint64_t currentTick;
-	int parseType;
-	int id;
-};
-
-typedef enum {
-	W, S, A, D, SPACE
-} KeyInput;
-
-enum PacketType {
-	NEW_CLIENT_PACKET,
-	WORLD_MAP_PACKET,
-	INPUT_PACKET,
-	CAR_PACKET,
-	CAR_PHYSICS_PACKET
-};
-
-struct ClientDataPacket {
-	PacketHeader packetHeader;
-	char username[28];
-};
-
-struct InputPacket {
-	PacketHeader packetHeader;
-	InputState inputs;
-};
-
-struct WorldMapPacket {
-	PacketHeader packetHeader;
-	std::vector<uint8_t> map;
-	uint8_t row;
-	uint8_t column;
-};
-
-struct CarPacket {
-	PacketHeader packetHeader;
-	CarState carState;
-	char assetImage[80];
-};
 
 static std::queue<CarPacket> createNewCars;
 
@@ -137,26 +92,6 @@ public:
 
 std::map<int, ClientData*> client_map; // map of client ID to ClientData
 
-void SendPacketReliable(ENetPeer* peer, const char* data) {
-	ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_RELIABLE);
-	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 1
-}
-
-void SendPacketUnseq(ENetPeer* peer, const char* data) {
-	ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
-	enet_peer_send(peer, CHANNEL_UNSEQUENCED, packet); // send packet on channel 1
-}
-
-void SendPacketUnseq(ENetPeer* peer, InputPacket data) {
-	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNSEQUENCED);
-	enet_peer_send(peer, CHANNEL_UNSEQUENCED, packet); // send packet on channel 0
-}
-
-void SendPacketUnseq(ENetPeer* peer, CarPacket data) {
-	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNSEQUENCED);
-	enet_peer_send(peer, CHANNEL_UNSEQUENCED, packet); // send packet on channel 0
-}
-
 // Parsing new clients 
 void ParseClientData(ClientDataPacket* data, uint32_t RTT) {
 	switch (data->packetHeader.parseType) {
@@ -197,7 +132,6 @@ void ParseCarData(CarPacket* data, double fixedDeltaTime) {
 		uint64_t serverTick = data->packetHeader.currentTick;
 
 		if (client_map[data->packetHeader.id] == nullptr || !connected) break;
-
 		int id = data->packetHeader.id;
 		ClientData* clientData = client_map[id];
 		if (clientData->GetCar() == nullptr) break;
@@ -253,6 +187,10 @@ void ParseCarData(CarPacket* data, double fixedDeltaTime) {
 	
 }
 
+void NetWorkDataThread() {
+
+}
+
 int main(int argc, char **argv) {
 	
 	printf("Please enter your username: ");
@@ -267,7 +205,7 @@ int main(int argc, char **argv) {
 	atexit(enet_deinitialize); // deinitialize ENet at exit
 
 	ENetHost* client;
-	client = enet_host_create(NULL, 1, 2, 0, 0); // create a client host
+	client = enet_host_create(NULL, 1, 3, 0, 0); // create a client host
 
 	if (client == NULL) {
 		std::cerr << "An error occurred while trying to create an ENet client host." << std::endl;
@@ -281,7 +219,7 @@ int main(int argc, char **argv) {
 	enet_address_set_host(&address, "127.0.0.1"); // set server address
 	address.port = 8008; // set server port
 
-	peer = enet_host_connect(client, &address, 2, 0); // connect to server
+	peer = enet_host_connect(client, &address, 3, 0); // connect to server
 	if (peer == NULL) {
 		std::cerr << "No available peers for initiating an ENet connection." << std::endl;
 		enet_host_destroy(client);
@@ -297,6 +235,8 @@ int main(int argc, char **argv) {
 		puts("Connection to server failed.");
 		return EXIT_SUCCESS; // exit without error, server might be offline
 	}
+
+	//std::thread networkThread(NetWorkDataThread);
 
 	// GAME LOOP START
 	if (!screen.init()) {
@@ -355,13 +295,13 @@ int main(int argc, char **argv) {
 						printf("once\n");
 						client_map[CLIENT_ID]->SetUsername(username);
 
-						char str_data[80] = "2|";
+						char str_data[80] = "1|";
 						strcat_s(str_data, sizeof(str_data), username);
-						SendPacketReliable(peer, str_data); // send username to server
+						SendPacket(peer, ChannelFlag::CHANNEL_RELIABLE, str_data); // send username to server
 
-						char isShaderLoaded[80] = "4|";
+						char isShaderLoaded[80] = "2|";
 						strcat_s(isShaderLoaded, sizeof(isShaderLoaded), "assets/car1_2.png");
-						SendPacketReliable(peer, isShaderLoaded);
+						SendPacket(peer, ChannelFlag::CHANNEL_RELIABLE, isShaderLoaded);
 
 						enet_host_flush(client);
 						isProcessingShaders = true;
@@ -406,9 +346,6 @@ int main(int argc, char **argv) {
 					screen.setShouldClose(true);
 				}
 
-				// Interpolation of other clients
-
-
 				// Process input and updates to input history
 				InputState& inputs = clientData->GetInputs()->processInputs(clientData->currentTick);
 
@@ -419,8 +356,10 @@ int main(int argc, char **argv) {
 					clientData->predictedCarState = clientData->GetCar()->SimulatePhysicsUpdate(clientData->predictedCarState, inputs, predictDt);
 				}
 
-				InputPacket inputPacket = { INPUT_PACKET, clientData->currentTick, 1, CLIENT_ID, inputs };
-				SendPacketUnseq(peer, inputPacket);
+				InputPacket inputPacket = { 
+					INPUT_PACKET, clientData->currentTick, 1, CLIENT_ID, inputs
+				};
+				SendPacket(peer, ChannelFlag::CHANNEL_UNSEQUENCED, inputPacket);
 
 				/*if (client_map[CLIENT_ID]->GetCar() != nullptr) {
 					CarPhysicsPacket packet{};
@@ -442,6 +381,7 @@ int main(int argc, char **argv) {
 					CarPacket data = createNewCars.front();
 					createNewCars.pop();
 					client_map[data.packetHeader.id]->CreateCar(data.carState.pos, data.assetImage);
+					std::cout << "New car created" << std::endl;
 				}
 
 				clientData->GetCamera2D()->followTarget(clientData->predictedCarState.pos);

@@ -41,5 +41,8 @@
     <ClInclude Include="src\Models\Tile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Network\Packets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

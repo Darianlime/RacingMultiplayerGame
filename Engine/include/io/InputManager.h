@@ -19,7 +19,7 @@ namespace Engine {
 		bool A = false;
 		bool D = false;
 		bool Space = false;
-		uint64_t tick;
+		uint64_t tick = 0;
 	};
 
 	class InputManager {

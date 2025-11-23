@@ -1,14 +1,12 @@
 #ifndef COLLISION2D_H
 #define COLLISION2D_H
+#define NOMINMAX
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include "Network/Packets.h"
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include "../Graphics/Models/Quad.hpp"
-#include "Shared/CarState.h"
 
-using namespace NetWork;
+using namespace NetworkClient;
 
 namespace Engine {
 	class Collision2D {

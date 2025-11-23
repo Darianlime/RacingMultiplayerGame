@@ -66,6 +66,9 @@
     <ClCompile Include="src\RaceTrackRender.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Packets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\graphics\models\Car.h">
@@ -113,10 +116,10 @@
     <ClInclude Include="include\Physics\Collision2D.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\Shared\CarState.h">
+    <ClInclude Include="include\graphics\models\RaceTrackRender.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\graphics\models\RaceTrackRender.h">
+    <ClInclude Include="include\Network\Packets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

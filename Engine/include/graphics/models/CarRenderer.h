@@ -8,9 +8,9 @@
 #include "Quad.hpp"
 #include "io/InputManager.h"
 #include "Physics/Collision2D.h"
-#include "Shared/CarState.h"
+#include "Network/Packets.h"
 
-using namespace NetWork;
+using namespace NetworkClient;
 
 namespace Engine {
 	struct CarProperties {

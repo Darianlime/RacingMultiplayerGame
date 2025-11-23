@@ -140,6 +140,7 @@
     <ClInclude Include="src\Models\Quad.hpp" />
     <ClInclude Include="src\Models\Tile.h" />
     <ClInclude Include="src\Models\WorldMap.h" />
+    <ClInclude Include="src\Network\Packets.h" />
     <ClInclude Include="src\Physics\Collision2D.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
