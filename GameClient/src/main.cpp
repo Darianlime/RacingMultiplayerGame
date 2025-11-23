@@ -28,6 +28,7 @@
 #include "graphics/Shader.h"
 #include "graphics/models/Quad.hpp"
 #include "graphics/Text.h"
+#include "graphics/models/RaceTrackRender.h"
 
 #include "Shared/CarState.h"
 
@@ -48,6 +49,7 @@ static Screen screen(1270, 720);
 static Joystick mainJ(0);
 static std::atomic<bool> connected = false;
 static std::atomic<bool> isProcessingShaders = false;
+static std::vector<uint8_t> worldMapTiles;
 static int CLIENT_ID = -1; // unique client ID assigned by server
 
 struct PacketHeader {
@@ -63,6 +65,7 @@ typedef enum {
 
 enum PacketType {
 	NEW_CLIENT_PACKET,
+	WORLD_MAP_PACKET,
 	INPUT_PACKET,
 	CAR_PACKET,
 	CAR_PHYSICS_PACKET
@@ -78,21 +81,17 @@ struct InputPacket {
 	InputState inputs;
 };
 
-//struct StateHistoryPacket {
-//	glm::vec3 pos;
-//	float rot;
-//	float currentAngle;
-//};
+struct WorldMapPacket {
+	PacketHeader packetHeader;
+	std::vector<uint8_t> map;
+	uint8_t row;
+	uint8_t column;
+};
 
 struct CarPacket {
 	PacketHeader packetHeader;
 	CarState carState;
 	char assetImage[80];
-};
-
-struct CarPhysicsPacket {
-	PacketHeader packetHeader;
-	glm::vec3 worldVerts[Quad::noVertices];
 };
 
 static std::queue<CarPacket> createNewCars;
@@ -113,7 +112,8 @@ public:
 	CarState serverCarState;
 	CarState predictedCarState;
 	std::map<uint64_t, CarState> stateSnapShots;
-	bool recivedServerData = false;
+	bool recivedServerData = false; 
+	bool colliding = false;
 
 	ClientData(int id) : m_id(id) {
 		serverCarState = {};
@@ -153,11 +153,6 @@ void SendPacketUnseq(ENetPeer* peer, InputPacket data) {
 }
 
 void SendPacketUnseq(ENetPeer* peer, CarPacket data) {
-	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNSEQUENCED);
-	enet_peer_send(peer, CHANNEL_UNSEQUENCED, packet); // send packet on channel 0
-}
-
-void SendPacketUnseq(ENetPeer* peer, CarPhysicsPacket data) {
 	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNSEQUENCED);
 	enet_peer_send(peer, CHANNEL_UNSEQUENCED, packet); // send packet on channel 0
 }
@@ -223,6 +218,7 @@ void ParseCarData(CarPacket* data, double fixedDeltaTime) {
 				CarRenderer* car2 = client2->GetCar();
 				if (car1 != nullptr && car2 != nullptr) {
 					collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), predictionCarState, car2->getTransform(), client2->serverCarState, fixedDeltaTime);
+					clientData->colliding = true;
 				}
 			}
 			if (!collision1) {
@@ -311,13 +307,14 @@ int main(int argc, char **argv) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	RaceTrackRender raceTrackRender;
 	Text text("assets/fonts/OCRAEXT.TTF", 48);
 	if (text.init() == -1) {
 		std::cout << "Failed to init text" << std::endl;
 		glfwTerminate();
 		return -1;
 	}
-	Shader shader("assets/object.vert", "assets/object.frag");
+	Shader objectShader("assets/object.vert", "assets/object.frag");
 	Shader textShader("assets/text.vert", "assets/text.frag");
 	/*glm::mat4 projection = glm::ortho(-float(Screen::SCR_WIDTH), float(Screen::SCR_WIDTH), -float(Screen::SCR_HEIGHT), float(Screen::SCR_HEIGHT), -1.0f, 1.0f);
 	textShader.activate();
@@ -371,6 +368,21 @@ int main(int argc, char **argv) {
 					}
 					break;
 				}
+				case PacketType::WORLD_MAP_PACKET:
+				{
+					uint8_t* data = (uint8_t*)event.packet->data;
+					size_t offset = 0;
+
+					offset += sizeof(PacketHeader);
+
+					uint8_t row = data[offset++];
+					uint8_t column = data[offset++];
+					size_t mapSize = row * column;
+
+					std::vector<uint8_t> map(mapSize);
+					memcpy(map.data(), data + offset, mapSize);
+					raceTrackRender.Init(map, row, column);
+				}
 				default: 
 				{
 					fprintf(stderr, "nothing received in client\n");
@@ -403,40 +415,8 @@ int main(int argc, char **argv) {
 				// Proccess Prediction Update 
 				//clientData->GetCar()->PredictionPhysicsUpdate(inputs, fixedDeltaTime);
 				double predictDt = 1.0 / PREDICTION_TICK_RATE;
-				//clientData->predictedCarState = clientData->GetCar()->SimulatePhysicsUpdate(clientData->predictedCarState, inputs, predictDt);
-				//const float softDistance = 3.0f;   // adjust depending on your car width
-				//const float pushFactor = 5.0f;     // how strongly to apply correction (0.05–0.2 works well)
-
-				//for (auto& [id, other] : client_map)
-				//{
-				//	if (id == clientData->GetID()) continue; // skip self
-				//	if (other == nullptr || other->GetCar() == nullptr) continue;
-
-				//	// remote state is authoritative or interpolated state
-				//	CarState remote = other->serverCarState;
-
-				//	glm::vec3 delta = remote.pos - clientData->predictedCarState.pos;
-				//	float dist = glm::length(delta);
-
-				//	if (dist < softDistance && dist > 0.001f)
-				//	{
-				//		glm::vec3 dir = delta / dist; // normalize
-				//		float penetration = softDistance - dist;
-
-				//		// push local predicted position away slightly
-				//		clientData->predictedCarState.pos -= dir * penetration * pushFactor;
-				//	}
-				//}
-				// Collisions for static objects not other clients
-				CarRenderer* car1 = clientData->GetCar();
-				for (auto& [id2, client2] : client_map) {
-					if (clientData->GetID() == id2) {
-						continue;
-					}
-					CarRenderer* car2 = client2->GetCar();
-					if (car1 != nullptr && car2 != nullptr) {
-						bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), clientData->predictedCarState, car2->getTransform(), client2->serverCarState, predictDt);
-					}
+				if (!clientData->colliding) {
+					clientData->predictedCarState = clientData->GetCar()->SimulatePhysicsUpdate(clientData->predictedCarState, inputs, predictDt);
 				}
 
 				InputPacket inputPacket = { INPUT_PACKET, clientData->currentTick, 1, CLIENT_ID, inputs };
@@ -465,7 +445,7 @@ int main(int argc, char **argv) {
 				}
 
 				clientData->GetCamera2D()->followTarget(clientData->predictedCarState.pos);
-				clientData->GetCamera2D()->updateCameraDirection(clientData->predictedCarState.currentAngle - 90.0f);
+				clientData->GetCamera2D()->updateCameraDirection(clientData->predictedCarState.currentAngle);
 
 				screen.update();
 
@@ -480,16 +460,18 @@ int main(int argc, char **argv) {
 				textShader.setMat4("view", view);
 				textShader.setMat4("projection", projection);
 
-				shader.activate();
-				shader.setMat4("view", view);
-				shader.setMat4("projection", projection);
+				objectShader.activate();
+				objectShader.setMat4("view", view);
+				objectShader.setMat4("projection", projection); 
+
+				raceTrackRender.Render(objectShader);
 
 				for (auto const& [id, client] : client_map) {
 					if (client == NULL || client->GetCar() == nullptr) continue;
 
 					if (id == CLIENT_ID) {
-						std::cout << "client x: " << client->predictedCarState.pos.x << " y: " << client->predictedCarState.pos.y << std::endl;
-						client->GetCar()->render(shader, client->predictedCarState.pos, client->predictedCarState.rot);
+						//std::cout << "client x: " << client->predictedCarState.pos.x << " y: " << client->predictedCarState.pos.y << std::endl;
+						client->GetCar()->render(objectShader, client->predictedCarState.pos, client->predictedCarState.rot - 90.0f);
 					}
 					else {
 						if (client->stateSnapShots.empty()) {
@@ -528,15 +510,14 @@ int main(int argc, char **argv) {
 						//	interpolateCar = client->stateSnapShots.rbegin()->second;
 						//}
 						client->serverCarState = interpolateCar;
-						std::cout << "other client x: " << interpolateCar.pos.x << " y: " << interpolateCar.pos.y << std::endl;
-						client->GetCar()->render(shader, interpolateCar.pos, interpolateCar.rot);
+						//std::cout << "other client x: " << interpolateCar.pos.x << " y: " << interpolateCar.pos.y << std::endl;
+						client->GetCar()->render(objectShader, interpolateCar.pos, interpolateCar.rot - 90.0f);
 					}
 				}
 				for (auto const& [id, client] : client_map) {
-					if (client != NULL && client->GetCar() != nullptr) {
+					if (client == NULL || client->GetCar() == nullptr) continue;
 						//printf("%s\n", client->GetUsername().c_str());
-						text.renderText(textShader, client->GetUsername(), client->predictedCarState.pos.x, client->predictedCarState.pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
-					}
+					text.renderText(textShader, client->GetUsername(), client->predictedCarState.pos.x, client->predictedCarState.pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
 				}
 
 				//printf("id:%d, x:%.2f, y:%.2f\n", clientData->GetID(), clientData->GetCar()->getTransform().pos.x, clientData->GetCar()->getTransform().pos.y);

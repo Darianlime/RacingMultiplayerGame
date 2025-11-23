@@ -13,6 +13,8 @@
 #include <thread>
 
 #include "Physics/Collision2D.h"
+#include "Models/WorldMap.h"
+
 #include "Models/Quad.hpp"
 #include <string.h>
 #include <cstdint>
@@ -34,6 +36,7 @@ typedef enum {
 
 enum PacketType {
 	NEW_CLIENT_PACKET,
+	WORLD_MAP_PACKET,
 	INPUT_PACKET,
 	CAR_PACKET,
 	CAR_PHYSICS_PACKET
@@ -53,6 +56,13 @@ struct PacketHeader {
 	uint64_t currentTick;
 	int parseType;
 	int id;
+};
+
+struct WorldMapPacket {
+	PacketHeader packetHeader;
+	std::vector<uint8_t> map;
+	uint8_t row;
+	uint8_t column;
 };
 
 struct StateHistoryPacket {
@@ -110,10 +120,10 @@ struct Car {
 	std::string assetImage;
 
 	Car() : 
-		transform(DYNAMIC), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(0.0f), forwardRot(0.0f), assetImage("") { }
+		transform(DYNAMIC), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(90.0f), forwardRot(0.0f), assetImage("") { }
 
 	glm::vec3 getForwardDirection() {
-		float angleRad = glm::radians(currentAngle - 90.0f);
+		float angleRad = glm::radians(currentAngle);
 		return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
 	}
 
@@ -188,6 +198,11 @@ void SendPacketReliable(ENetPeer* peer, ClientDataPacket data) {
 }
 
 void SendPacketReliable(ENetPeer* peer, CarPacket data) {
+	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
+	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 0
+}
+
+void SendPacketReliable(ENetPeer* peer, WorldMapPacket data) {
 	ENetPacket* packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_RELIABLE);
 	enet_peer_send(peer, CHANNEL_RELIABLE, packet); // send packet on channel 0
 }
@@ -385,6 +400,7 @@ int main(int argc, char** argv) {
 	double atHertz = 0.0;
 
 	// GAME LOOP START
+	WorldMap map;
 	int new_client_id = 0;
 	while (true) {
 		steady_clock::time_point currentTime = high_resolution_clock::now();
@@ -415,10 +431,39 @@ int main(int argc, char** argv) {
 				client_map[new_client_id] = new ClientData(new_client_id);
 				event.peer->data = client_map[new_client_id]; // store client ID as peer data
 
-				// 3 new id
+				// 2 new id
 				ClientDataPacket header = { NEW_CLIENT_PACKET, currentServerTick, 2, new_client_id, ""};
 				SendPacketReliable(event.peer, header);
+
+				// =====MAP POSITIONS==============
+				size_t mapSize = map.GetRow() * map.GetColumn();
+				std::vector<uint8_t> buffer;
+				buffer.reserve(sizeof(PacketHeader) + 2 + mapSize);
+
+				PacketHeader headerMap{ WORLD_MAP_PACKET, 0, 1, new_client_id };
+
+				// Serialize header
+				uint8_t* headerBytes = reinterpret_cast<uint8_t*>(&headerMap);
+				buffer.insert(buffer.end(), headerBytes, headerBytes + sizeof(PacketHeader));
+
+				// Serialize row + column
+				buffer.push_back(map.GetRow());
+				buffer.push_back(map.GetColumn());
+
+				// Serialize map
+				buffer.insert(buffer.end(), map.GetMap().begin(), map.GetMap().end());
+
+				// Send via ENet
+				ENetPacket* packet = enet_packet_create(
+					buffer.data(),
+					buffer.size(),
+					ENET_PACKET_FLAG_RELIABLE
+				);
+
+				enet_peer_send(event.peer, CHANNEL_RELIABLE, packet);
+
 				enet_host_flush(server);
+
 				break;
 			}
 			case ENET_EVENT_TYPE_RECEIVE:

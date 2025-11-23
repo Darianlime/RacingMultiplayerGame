@@ -24,6 +24,9 @@ namespace Engine {
 		updateCameraVectors();
 	}
 
+	glm::vec3 Camera2D::getTargetPos() {
+		return cameraPos;
+	}
 
 	void Camera2D::followTarget(glm::vec3 targetPos) {
 		cameraPos = targetPos;

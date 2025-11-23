@@ -39,6 +39,7 @@ namespace Engine {
 		void updateCameraZoom(double dy);
 
 		float getZoom();
+		glm::vec3 getTargetPos();
 
 		glm::mat4 getViewMatrix();
 

@@ -12,7 +12,7 @@ namespace Engine {
 		generate();
 
 		if (defaultParams) {
-			setFilters(GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
+			setFilters(GL_NEAREST, GL_NEAREST_MIPMAP_NEAREST);
 			setWrap(GL_CLAMP_TO_EDGE);
 		}
 	}
@@ -21,7 +21,7 @@ namespace Engine {
 		generate();
 
 		if (defaultParams) {
-			setFilters(GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
+			setFilters(GL_NEAREST, GL_NEAREST_MIPMAP_NEAREST);
 			setWrap(GL_CLAMP_TO_EDGE);
 		}
 	}

@@ -100,7 +100,7 @@ namespace Engine {
 			if (state.velocity < 0.0f) state.velocity = 0.0f;
 		}
 
-		glm::vec3 forward = carProperties.getForwardDirectionSim(state.currentAngle);
+		glm::vec3 forward = carProperties.getForwardDirectionSim(state.currentAngle + 90.0f);
 		forward = glm::normalize(forward);
 		state.pos += forward * state.velocity * (float)fixedDeltaTime;
 		state.currentAngle = -state.forwardRot;

@@ -131,11 +131,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Models\Tile.cpp" />
+    <ClCompile Include="src\Models\WorldMap.cpp" />
     <ClCompile Include="src\Physics\Collision2D.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Models\Quad.hpp" />
+    <ClInclude Include="src\Models\Tile.h" />
+    <ClInclude Include="src\Models\WorldMap.h" />
     <ClInclude Include="src\Physics\Collision2D.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

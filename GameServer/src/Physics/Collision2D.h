@@ -1,8 +1,6 @@
 #ifndef COLLISION2D_H
 #define COLLISION2D_H
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "../Models/Quad.hpp"
