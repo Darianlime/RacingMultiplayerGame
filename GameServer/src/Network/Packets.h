@@ -20,8 +20,8 @@ namespace NetworkServer {
 	struct PacketHeader {
 		uint8_t packetType;
 		uint64_t currentTick;
-		int parseType;
-		int id;
+		uint8_t parseType;
+		uint8_t id;
 	};
 
 	struct WorldMapPacket {
@@ -55,6 +55,7 @@ namespace NetworkServer {
 		float currentAngle;
 		float velocity;
 		float forwardRot;
+		bool collided;
 	};
 
 	struct CarPacket {

@@ -56,6 +56,7 @@
     <ClInclude Include="include\io\Screen.h" />
     <ClInclude Include="include\Network\Packets.h" />
     <ClInclude Include="include\Physics\Collision2D.h" />
+    <ClInclude Include="include\Threads\ThreadSafeQueue.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

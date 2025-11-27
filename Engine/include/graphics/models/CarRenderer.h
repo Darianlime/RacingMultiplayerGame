@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <deque>
+#include <memory>
 #include <glm/glm.hpp>
 
 #include "Quad.hpp"
@@ -34,13 +35,13 @@ namespace Engine {
 		{
 		}
 
-		glm::vec3 getForwardDirection() {
+		glm::vec3 GetForwardDirection() {
 			float angleRad = glm::radians(currentAngle - 90.0f);
 			return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
 		}
 
-		glm::vec3 getForwardDirectionSim(float simCurrentAngle) {
-			float angleRad = glm::radians(simCurrentAngle - 90.0f);
+		glm::vec3 GetForwardDirectionSim(float simCurrentAngle) {
+			float angleRad = glm::radians(simCurrentAngle);
 			return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
 		}
 	};
@@ -59,16 +60,16 @@ namespace Engine {
 		CarRenderer(glm::vec3 pos, const char* imageName);
 
 		void PredictionPhysicsUpdate(InputState& inputState, double fixedDeltaTime);
-		CarState SimulatePhysicsUpdate(CarState& state, InputState& inputState, double fixedDeltaTime);
+		CarState SimulatePhysicsUpdate(CarState state, const InputState& inputState, double fixedDeltaTime);
 		//void pushCarHistory(int tick);
-		Quad& getTransform() { return transform; }
-		CarProperties& getProperties() { return carProperties; }
-		float getCurrentAngle() { return currentAngle; }
-		void setCurrentAngle(float angle) { currentAngle = angle; }
-		const char* getImage() { return assetImage; }
+		Quad& GetTransform() { return transform; }
+		CarProperties& GetProperties() { return carProperties; }
+		float GetCurrentAngle() { return currentAngle; }
+		void GetCurrentAngle(float angle) { currentAngle = angle; }
+		const char* GetImage() { return assetImage; }
 
-		void render(Shader shader);
-		void render(Shader shader, glm::vec3 pos, float rot);
+		void Render(Shader shader);
+		void Render(Shader shader, glm::vec3 pos, float rot);
 	};
 };
 #endif // !CAR_H

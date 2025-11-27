@@ -1,4 +1,5 @@
 #include "Collision2D.h"
+#include <iostream>
 
 Collision2D::Collision2D() {
 
@@ -96,7 +97,6 @@ bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2, float fixedDeltaT
 		q1.pos -= glm::vec3(correction * 0.5f, 0.0f);
 		q2.pos += glm::vec3(correction * 0.5f, 0.0f);
 	}
-
 	return true;
 }
 

@@ -19,6 +19,7 @@ namespace Engine {
 		Texture();
 		Texture(bool defaultParams);
 		Texture(const char* path, const char* name, bool defaultParams = true);
+		Texture(const Texture& other);
 
 		void generate();
 		void load(bool flip = true);

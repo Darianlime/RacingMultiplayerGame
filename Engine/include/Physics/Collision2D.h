@@ -9,6 +9,12 @@
 using namespace NetworkClient;
 
 namespace Engine {
+	struct CollisionResult {
+		bool isCollided;
+		glm::vec2 normal;
+		float overlap;
+	};
+
 	class Collision2D {
 	private:
 
@@ -17,7 +23,7 @@ namespace Engine {
 
 		static bool checkOBBCollision(Quad& q1, Quad& q2);
 		static bool checkOBBCollisionResolve(Quad& q1, Quad& q2);
-		static bool checkOBBCollisionResolve(Quad& q1, CarState& carState1, Quad& q2, CarState& carState2, float fixedDeltaTime);
+		static CollisionResult checkOBBCollisionResolve(Quad& q1, CarState& carState1, Quad& q2, CarState& carState2, float fixedDeltaTime);
 	};
 }
 #endif // !COLLISION2D_H

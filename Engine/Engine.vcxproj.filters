@@ -122,5 +122,8 @@
     <ClInclude Include="include\Network\Packets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\Threads\ThreadSafeQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

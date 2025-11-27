@@ -41,11 +41,20 @@ struct Car {
 	float maxSpeed;
 	float currentAngle;
 	float forwardRot;
+	bool collided;
 
 	std::string assetImage;
 
 	Car() : 
-		transform(DYNAMIC), velocity(0.0f), accel(0.0f), minSpeed(-800.0f), maxSpeed(2700.0f), currentAngle(90.0f), forwardRot(0.0f), assetImage("") { }
+		transform(DYNAMIC),
+		velocity(0.0f),
+		accel(0.0f),
+		minSpeed(-800.0f),
+		maxSpeed(2700.0f),
+		currentAngle(90.0f),
+		forwardRot(0.0f),
+		assetImage(""),
+		collided(false) { }
 
 	glm::vec3 getForwardDirection() {
 		float angleRad = glm::radians(currentAngle);
@@ -57,7 +66,7 @@ struct Car {
 
 class ClientData {
 private:
-	int m_id;
+	uint8_t m_id;
 	std::string username;
 	std::unique_ptr<Car> car;
 public:
@@ -66,23 +75,23 @@ public:
 	std::deque<StateHistoryPacket> statePacketHistory;
 	InputState lastKnownInput;
 
-	ClientData(int id) : m_id(id) {}
+	ClientData(uint8_t id) : m_id(id) {}
 
 	void SetUsername(std::string name) { username = name; }
 	void CreateCar() { car = std::make_unique<Car>(); }
 
 	Car* GetCar() const { return car.get(); }
-	InputState& GetInputState(int index) { return inputStateHistory[index]; }
-	StateHistoryPacket& GetStateHistory(int index) { return statePacketHistory[index % HISTORY_SIZE]; }
-	void SetStateHistory(StateHistoryPacket packet, int index) { statePacketHistory[index % HISTORY_SIZE] = packet; }
+	InputState& GetInputState(uint32_t index) { return inputStateHistory[index]; }
+	StateHistoryPacket& GetStateHistory(uint32_t index) { return statePacketHistory[index % HISTORY_SIZE]; }
+	void SetStateHistory(StateHistoryPacket packet, uint32_t index) { statePacketHistory[index % HISTORY_SIZE] = packet; }
 
-	int GetID() const { return m_id; }
+	uint8_t GetID() const { return m_id; }
 	const std::string& GetUsername() const { return username; }
 };
 
-std::map<int, ClientData*> client_map; // map of client ID to ClientData
+std::map<uint8_t, ClientData*> client_map; // map of client ID to ClientData
 
-void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
+void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, char* data) {
 
 	int data_type;
 	sscanf_s(data, "%d|", &data_type);
@@ -133,10 +142,12 @@ void ParseData(ENetHost* server, ENetPeer* peer, int id, char* data) {
 	}
 }
 
-void ParseData(ENetHost* server, ENetPeer* peer, int id, InputPacket* data) {
+void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, InputPacket* data) {
 	switch (data->packetHeader.parseType) {
 	case 1:
 		InputState input = data->inputs;
+		//std::cout << "inital " << input.W << input.S << input.A << input.D << std::endl;
+		//std::cout << "inputtick " << input.currentTick << "currentServerTick: " << currentServerTick << std::endl;
 		if (input.currentTick > currentServerTick) {
 			client_map[id]->inputStateHistory[input.currentTick] = input;
 		}
@@ -155,6 +166,7 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			else {
 				inputState = client_map[id]->inputStateHistory[currentServerTick];
 			}
+			//std::cout << "id " << static_cast<int>(id) << std::endl;
 			//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 			if (inputState.W) {
 				car->accel = car->maxSpeed;
@@ -193,6 +205,7 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			forward = glm::normalize(forward);
 			car->getTransform().pos += forward * car->velocity * (float)fixedDeltaTime;
 			car->currentAngle = -car->forwardRot;
+			//std::cout << car->velocity << " " << car->accel << inputState.S << std::endl;
 		}
 	}
 
@@ -205,6 +218,7 @@ void PhysicsUpdate(double fixedDeltaTime) {
 			Car* car2 = client2->GetCar();
 			if (car1 != nullptr && car2 != nullptr) {
 				bool collision1 = Collision2D::checkOBBCollisionResolve(car1->getTransform(), car2->getTransform(), fixedDeltaTime);
+				car1->collided = collision1;
 			}
 		}
 	}
@@ -234,14 +248,14 @@ int main(int argc, char** argv) {
 	const double FIXED_HERTZ = 1.0 / SERVER_TICK_RATE; // 64 ticks per sec 
 	const auto TICK_DURATION = std::chrono::duration<double>(FIXED_HERTZ);
 
-	steady_clock::time_point lastTime = high_resolution_clock::now();
+	high_resolution_clock::time_point lastTime = high_resolution_clock::now();
 	double atHertz = 0.0;
 
 	// GAME LOOP START
 	WorldMap map;
-	int new_client_id = 0;
+	uint8_t new_client_id = 0;
 	while (true) {
-		steady_clock::time_point currentTime = high_resolution_clock::now();
+		high_resolution_clock::time_point currentTime = high_resolution_clock::now();
 		double deltaTime = duration_cast<duration<double>>(currentTime - lastTime).count();
 		lastTime = currentTime;
 		atHertz += deltaTime;
@@ -280,18 +294,14 @@ int main(int argc, char** argv) {
 
 				PacketHeader headerMap{ WORLD_MAP_PACKET, 0, 1, new_client_id };
 
-				// Serialize header
 				uint8_t* headerBytes = reinterpret_cast<uint8_t*>(&headerMap);
 				buffer.insert(buffer.end(), headerBytes, headerBytes + sizeof(PacketHeader));
 
-				// Serialize row + column
 				buffer.push_back(map.GetRow());
 				buffer.push_back(map.GetColumn());
 
-				// Serialize map
 				buffer.insert(buffer.end(), map.GetMap().begin(), map.GetMap().end());
 
-				// Send via ENet
 				ENetPacket* packet = enet_packet_create(
 					buffer.data(),
 					buffer.size(),
@@ -354,7 +364,8 @@ int main(int argc, char** argv) {
 
 				CarPacket packet = { 
 					PacketType::CAR_PACKET, currentServerTick, 1, id,
-					car->getTransform().pos, car->getTransform().rot, car->currentAngle, car->velocity, car->forwardRot
+					car->getTransform().pos, car->getTransform().rot, 
+					car->currentAngle, car->velocity, car->forwardRot, car->collided
 				};
 
 				client->GetCar()->getTransform().calculateWorldVerts(car->getTransform().pos, car->getTransform().rot - 90.0f);

@@ -5,6 +5,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 #include <map>
+#include <mutex>
+#include <memory>
 #include "Quad.hpp"
 
 namespace Engine {
@@ -39,6 +41,8 @@ namespace Engine {
 		RaceTrackRender();
 		void Init(std::vector<uint8_t> map, uint8_t row, uint8_t column);
 		void Render(Shader shader);
+		const std::vector<Quad>& GetTiles() const { return tiles; }
+		Quad GetTileIndex(uint32_t index) const { return tiles[index]; }
 	private:
 		std::vector<uint8_t> map;
 		uint8_t row, column;

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <variant>
 #include <enet/enet.h>
 #include "io/InputManager.h"
 
@@ -17,13 +18,20 @@ namespace NetworkClient {
 		float currentAngle;
 		float velocity;
 		float forwardRot;
+		bool collided;
+	};
+
+	struct WorldMap {
+		std::vector<uint8_t> map;
+		uint8_t row;
+		uint8_t column;
 	};
 
 	struct PacketHeader {
 		uint8_t packetType;
 		uint64_t currentTick;
-		int parseType;
-		int id;
+		uint8_t parseType;
+		uint8_t id;
 	};
 
 	struct ClientDataPacket {
@@ -38,12 +46,15 @@ namespace NetworkClient {
 
 	struct WorldMapPacket {
 		PacketHeader packetHeader;
-		std::vector<uint8_t> map;
-		uint8_t row;
-		uint8_t column;
+		WorldMap map;
 	};
 
 	struct CarPacket {
+		PacketHeader packetHeader;
+		CarState carState;
+	};
+
+	struct CarPacketImage {
 		PacketHeader packetHeader;
 		CarState carState;
 		char assetImage[80];
@@ -71,6 +82,8 @@ namespace NetworkClient {
 		ENetPacket* packet = enet_packet_create(data, strlen(data) + 1, static_cast<enet_uint32>(channel));
 		enet_peer_send(peer, static_cast<enet_uint8>(channel), packet);
 	}
+
+	using UpdatePacket = std::variant<CarPacketImage, WorldMap>;
 
 	class Packets {
 	public:

@@ -8,6 +8,17 @@ namespace Engine {
 
 	Texture::Texture() = default;
 
+	Texture::Texture(const Texture& other) {
+		currentId = other.currentId;
+		path = other.path;
+		width = other.width;
+		height = other.height;
+		id = other.id;
+		tex = other.tex;
+		nChannels = other.nChannels;
+		name = other.name;
+	}
+
 	Texture::Texture(bool defaultParams) : id(currentId++) {
 		generate();
 

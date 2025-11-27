@@ -8,6 +8,10 @@ int Texture::currentId = 0;
 
 Texture::Texture() = default;
 
+Texture::Texture(const Texture& other) {
+	currentId = other.currentId;
+}
+
 Texture::Texture(bool defaultParams) {
 	generate();
 

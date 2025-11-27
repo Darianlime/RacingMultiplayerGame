@@ -4,21 +4,21 @@
 namespace Engine {
 	CarRenderer::CarRenderer() {
 		transform = Quad(DYNAMIC);
-		transform.init();
+		transform.initQuads();
 		currentAngle = 0.0f;
 		assetImage = NULL;
 	}
 
 	CarRenderer::CarRenderer(const char* imageName) {
 		transform = Quad({ imageName }, DYNAMIC);
-		transform.init();
+		transform.initQuads();
 		currentAngle = 0.0f;
 		assetImage = imageName;
 	}
 
 	CarRenderer::CarRenderer(glm::vec3 pos, const char* imageName) {
 		transform = Quad({ imageName }, DYNAMIC);
-		transform.init();
+		transform.initQuads();
 		transform.pos = pos;
 		currentAngle = 0.0f;
 		assetImage = imageName;
@@ -59,13 +59,13 @@ namespace Engine {
 			if (carProperties.velocity < 0.0f) carProperties.velocity = 0.0f;
 		}
 
-		glm::vec3 forward = carProperties.getForwardDirection();
+		glm::vec3 forward = carProperties.GetForwardDirection();
 		forward = glm::normalize(forward);
 		transform.pos += forward * carProperties.velocity * (float)fixedDeltaTime;
 		carProperties.currentAngle = -carProperties.forwardRot;
 	}
 
-	CarState CarRenderer::SimulatePhysicsUpdate(CarState& state, InputState& inputState, double fixedDeltaTime) {
+	CarState CarRenderer::SimulatePhysicsUpdate(CarState state, const InputState& inputState, double fixedDeltaTime) {
 		//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
 		if (inputState.W) {
 			carProperties.accel = carProperties.maxSpeed;
@@ -100,7 +100,7 @@ namespace Engine {
 			if (state.velocity < 0.0f) state.velocity = 0.0f;
 		}
 
-		glm::vec3 forward = carProperties.getForwardDirectionSim(state.currentAngle + 90.0f);
+		glm::vec3 forward = carProperties.GetForwardDirectionSim(state.currentAngle);
 		forward = glm::normalize(forward);
 		state.pos += forward * state.velocity * (float)fixedDeltaTime;
 		state.currentAngle = -state.forwardRot;
@@ -113,11 +113,11 @@ namespace Engine {
 		carStateHistory.push_back(state);
 	}*/
 
-	void CarRenderer::render(Shader shader) {
+	void CarRenderer::Render(Shader shader) {
 		transform.render(shader);
 	}
 
-	void CarRenderer::render(Shader shader, glm::vec3 pos, float rot) {
+	void CarRenderer::Render(Shader shader, glm::vec3 pos, float rot) {
 		transform.render(shader, pos, rot);
 	}
 }
