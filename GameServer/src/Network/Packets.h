@@ -70,7 +70,7 @@ namespace NetworkServer {
 	};
 
 	enum PacketType : uint8_t {
-		NEW_CLIENT_PACKET,
+		CLIENT_PACKET,
 		WORLD_MAP_PACKET,
 		INPUT_PACKET,
 		CAR_PACKET

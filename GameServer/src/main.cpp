@@ -102,7 +102,7 @@ void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, char* data) {
 		char username[28] = { '\0' };
 		sscanf_s(data, "1|%28[^\n]", &username, (unsigned)28);
 
-		ClientDataPacket data = {NEW_CLIENT_PACKET, 0, 1, id, ""};
+		ClientDataPacket data = { CLIENT_PACKET, 0, 1, id, ""};
 		strcpy_s(data.username, sizeof(data.username), username);
 
 		std::cout << "Broadcasting: " << data.username << std::endl;
@@ -123,7 +123,7 @@ void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, char* data) {
 			client->GetCar()->assetImage = img;
 		}
 
-		printf("%s", img);
+		//printf("%s", img);
 		CarPacketImage packet = { PacketType::CAR_PACKET, 0, 2, id, glm::vec3(0.0f), 0.0f, 90.0f, 0.0f, 0.0f, ""};
 		strcpy_s(packet.assetImage, sizeof(packet.assetImage), img);
 		BroadcastPacket(server, ChannelFlag::CHANNEL_RELIABLE, packet);
@@ -271,7 +271,7 @@ int main(int argc, char** argv) {
 				for (auto const& pair : client_map) {
 					if (pair.second->GetCar() == nullptr) continue;
 
-					ClientDataPacket data = { NEW_CLIENT_PACKET, 0, 1, pair.first, ""};
+					ClientDataPacket data = { CLIENT_PACKET, 0, 1, pair.first, ""};
 					strcpy_s(data.username, sizeof(data.username), pair.second->GetUsername().c_str());
 					/*ENetPacket* packet = enet_packet_create(send_data, strlen(send_data) + 1, ENET_PACKET_FLAG_RELIABLE);
 					enet_peer_send(event.peer, 0, packet);*/
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
 				event.peer->data = client_map[new_client_id]; // store client ID as peer data
 
 				// 2 new id
-				ClientDataPacket header = { NEW_CLIENT_PACKET, currentServerTick, 2, new_client_id, ""};
+				ClientDataPacket header = { CLIENT_PACKET, currentServerTick, 2, new_client_id, ""};
 				SendPacket(event.peer, ChannelFlag::CHANNEL_RELIABLE, header);
 
 				// =====MAP POSITIONS==============
@@ -336,12 +336,15 @@ int main(int argc, char** argv) {
 			{
 				std::cout << (char*)event.peer->data << event.peer->address.host << event.peer->address.port << " disconnected." << std::endl;
 
-				char disconnected_data[126] = { '\0' };
-				sprintf_s(disconnected_data, sizeof(disconnected_data), "4|%d", static_cast<ClientData*>(event.peer->data)->GetID());
-				BroadcastPacket(server, ChannelFlag::CHANNEL_RELIABLE, disconnected_data);
+				ClientDataPacket header = { CLIENT_PACKET, currentServerTick, 3, static_cast<ClientData*>(event.peer->data)->GetID(), "" };
+				BroadcastPacket(server, ChannelFlag::CHANNEL_RELIABLE, header);
 
-				event.peer->data = NULL;
-				break;
+				auto it = client_map.find(static_cast<ClientData*>(event.peer->data)->GetID());
+				if (it != client_map.end()) {
+					ClientData* c = it->second;
+					delete c;
+					client_map.erase(it);
+				}
 			}
 			}
 		}

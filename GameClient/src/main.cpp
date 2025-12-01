@@ -62,6 +62,7 @@ private:
 	std::unique_ptr<Camera2D> camera2D;
 	std::unique_ptr<Text> textRenderer;
 	std::unique_ptr<InputManager> inputs;
+	std::atomic<uint16_t> ping;
 public:
 	uint64_t currentTick = 0;
 	uint64_t lastServerTick = 0;
@@ -72,7 +73,7 @@ public:
 	bool recivedServerData = false; 
 	bool colliding = false;
 
-	ClientData(uint8_t id) : m_id(id) {
+	ClientData(uint8_t id, uint16_t ping) : m_id(id), ping(ping) {
 		serverCarState = {};
 		predictedCarState = {};
 		inputs = std::make_unique<InputManager>();
@@ -89,6 +90,9 @@ public:
 	InputManager* GetInputs() const { return inputs.get(); }
 
 	uint8_t GetID() const { return m_id; }
+
+	uint16_t GetPing() const { return ping.load(); }
+	void SetPing(uint16_t ping) { this->ping.store(ping); }
 	const std::string& GetUsername() const { return username; }
 };
 
@@ -101,7 +105,7 @@ void ParseClientData(ClientDataPacket* data, uint32_t RTT) {
 	{
 		if (client_map.find(data->packetHeader.id) == client_map.end()) {
 			std::cout << "id assigned?" << static_cast<int>(data->packetHeader.id) << std::endl;
-			client_map[data->packetHeader.id] = new ClientData(data->packetHeader.id);
+			client_map[data->packetHeader.id] = new ClientData(data->packetHeader.id, RTT);
 			client_map[data->packetHeader.id]->SetUsername(data->username);
 		}
 		break;
@@ -109,7 +113,7 @@ void ParseClientData(ClientDataPacket* data, uint32_t RTT) {
 	case 2: // new client data
 	{
 		CLIENT_ID = data->packetHeader.id; // server assigns unique client ID
-		client_map[CLIENT_ID] = new ClientData(CLIENT_ID);
+		client_map[CLIENT_ID] = new ClientData(CLIENT_ID, RTT);
 		CarState carState = { glm::vec3(0.0f), 0.0f, 0.0f ,0.0f ,0.0f };
 		UpdatePacket packet = CarPacketImage{ CAR_PACKET, 0, 2, CLIENT_ID, carState, "assets/car1_2.png" };
 		updatePacketsQ.push(packet);
@@ -121,6 +125,11 @@ void ParseClientData(ClientDataPacket* data, uint32_t RTT) {
 		client_map[CLIENT_ID]->currentTick = data->packetHeader.currentTick + driftTicks + RTT;
 		connected = true;
 		break;
+	}
+	case 3: // other client disconnect
+	{
+		UpdatePacket packet = DisconnectOtherClient{ data->packetHeader.id };
+		updatePacketsQ.push(packet);
 	}
 	}
 }
@@ -159,6 +168,9 @@ void NetWorkDataThread(ENetHost* client, ENetPeer* peer, const char* username) {
 			{
 				PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 				uint8_t type = reinterpret_cast<PacketHeader*>(event.packet->data)->packetType;
+				if (client_map.find(CLIENT_ID) != client_map.end()) {
+					client_map[CLIENT_ID]->SetPing(peer->roundTripTime);
+				}
 				switch (type) {
 				case PacketType::CAR_PACKET:
 				{
@@ -166,7 +178,7 @@ void NetWorkDataThread(ENetHost* client, ENetPeer* peer, const char* username) {
 					ParseCarData(reinterpret_cast<CarPacketImage*>(event.packet->data), predictDt);
 					break;
 				}
-				case PacketType::NEW_CLIENT_PACKET: // new user
+				case PacketType::CLIENT_PACKET: // new user
 				{
 					uint32_t RTT = peer->roundTripTime;
 					ParseClientData(reinterpret_cast<ClientDataPacket*>(event.packet->data), RTT);
@@ -333,7 +345,7 @@ int main(int argc, char **argv) {
 					else if (delta > MAX_LEAD) {
 						clientData->currentTick--;
 					}
-					std::cout << "tick: " << clientData->currentTick << "server tick" << serverTick << std::endl;
+					//std::cout << "tick: " << clientData->currentTick << "server tick" << serverTick << std::endl;
 
 
 					if (client_map[data->packetHeader.id] == nullptr) continue;
@@ -364,7 +376,7 @@ int main(int argc, char **argv) {
 						//	}
 						//}
 						//if (!clientDataRec->colliding) {
-						for (uint64_t i = serverTick + 1; i <= clientDataRec->currentTick; ++i) {
+						for (uint64_t i = serverTick + 1; i < clientDataRec->currentTick; ++i) {
 							if (!clientData->colliding) {
 								InputState inputState = clientDataRec->GetInputs()->GetInputStateHistory(i);
 								predictionCarState = car1->SimulatePhysicsUpdate(predictionCarState, inputState, PREDICTION_FIXED_HERTZ);
@@ -389,9 +401,6 @@ int main(int argc, char **argv) {
 										float correctionAmount = std::max(res.overlap - slop, 0.0f) * percent;
 										predictionCarState.pos -= glm::vec3(res.normal * correctionAmount, 0.0f);
 										clientDataRec->colliding = true;
-										std::cout << clientDataRec->colliding << std::endl;
-
-
 									}
 									car2->GetTransform().UpdateWorldVerts(client2->serverCarState);
 									car1->GetTransform().UpdateWorldVerts(predictionCarState);
@@ -443,6 +452,14 @@ int main(int argc, char **argv) {
 					else if (auto* map = std::get_if<WorldMap>(&updatePacket)) {
 						raceTrackRender.Init(map->map, map->row, map->column);
 					}
+					else if (auto* disconnect = std::get_if<DisconnectOtherClient>(&updatePacket)) {
+						auto it = client_map.find(disconnect->id);
+						if (it != client_map.end()) {
+							ClientData* c = it->second;
+							delete c;
+							client_map.erase(it);
+						}
+					}
 					std::cout << "New quad created" << std::endl;
 				}
 
@@ -491,14 +508,10 @@ int main(int argc, char **argv) {
 					CarState interpolateCar{};
 					if (client->stateSnapShots.begin() == itUpper) {
 						interpolateCar = itUpper->second;
-						std::cout << "state empty1" << std::endl;
-
 					}
 					else if (client->stateSnapShots.end() == itUpper) {
 						std::map<uint64_t, CarState>::iterator itLast = std::prev(client->stateSnapShots.end());
 						interpolateCar = itLast->second;
-						std::cout << "state empty2" << std::endl;
-
 					}
 					else {
 						std::map<uint64_t, CarState>::iterator itLower = std::prev(itUpper);
@@ -507,13 +520,8 @@ int main(int argc, char **argv) {
 
 						float denom = float(itUpper->first - itLower->first);
 						float t = denom > 0.0f ? float(renderTick - itLower->first) / denom : 0.0f;
-						//t = glm::clamp(t, 0.0f, 1.0f);
 						interpolateCar.pos = glm::mix(state1.pos, state2.pos, t);
 						interpolateCar.rot = glm::mix(state1.rot, state2.rot, t);
-						/*interpolateCar.velocity = glm::mix(state1.velocity, state2.velocity, t);
-						interpolateCar.currentAngle = glm::mix(state1.currentAngle, state2.currentAngle, t);
-						interpolateCar.forwardRot = glm::mix(state1.forwardRot, state2.forwardRot, t);*/
-
 					}
 
 					client->serverCarState = interpolateCar;
@@ -525,8 +533,20 @@ int main(int argc, char **argv) {
 				for (auto const& [id, client] : client_map) {
 					if (client == NULL || client->GetCar() == nullptr) continue;
 						//printf("%s\n", client->GetUsername().c_str());
-					text.renderText(textShader, client->GetUsername(), client->predictedCarState.pos.x, client->predictedCarState.pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+					if (id == CLIENT_ID) {
+						text.renderText(textShader, client->GetUsername(), client->predictedCarState.pos.x, client->predictedCarState.pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
+						continue;
+					}
+
+					text.renderText(textShader, client->GetUsername(), client->serverCarState.pos.x, client->serverCarState.pos.y, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
 				}
+
+				view = glm::mat4(1.0f);
+				textShader.activate();
+				textShader.setMat4("view", view);
+				textShader.setMat4("projection", projection);
+				
+				text.renderText(textShader, "Ping: " + std::to_string(clientData->GetPing()), (screen.SCR_WIDTH) - 300.0f, (screen.SCR_HEIGHT) - 100.0f, 1.0f, glm::vec3(0.0f, 0.0f, 0.0f));
 
 				//printf("id:%d, x:%.2f, y:%.2f\n", clientData->GetID(), clientData->GetCar()->getTransform().pos.x, clientData->GetCar()->getTransform().pos.y);
 				screen.newFrame();

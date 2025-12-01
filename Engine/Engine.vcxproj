@@ -30,7 +30,6 @@
     <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\Mouse.cpp" />
-    <ClCompile Include="src\Packets.cpp" />
     <ClCompile Include="src\RaceTrackRender.cpp" />
     <ClCompile Include="src\Screen.cpp" />
     <ClCompile Include="src\Shader.cpp" />

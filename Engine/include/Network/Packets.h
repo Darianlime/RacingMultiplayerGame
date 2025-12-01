@@ -60,8 +60,12 @@ namespace NetworkClient {
 		char assetImage[80];
 	};
 
+	struct DisconnectOtherClient {
+		uint8_t id;
+	};
+
 	enum PacketType : uint8_t {
-		NEW_CLIENT_PACKET,
+		CLIENT_PACKET,
 		WORLD_MAP_PACKET,
 		INPUT_PACKET,
 		CAR_PACKET
@@ -83,7 +87,7 @@ namespace NetworkClient {
 		enet_peer_send(peer, static_cast<enet_uint8>(channel), packet);
 	}
 
-	using UpdatePacket = std::variant<CarPacketImage, WorldMap>;
+	using UpdatePacket = std::variant<CarPacketImage, WorldMap, DisconnectOtherClient>;
 
 	class Packets {
 	public:
