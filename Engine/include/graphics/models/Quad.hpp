@@ -72,6 +72,7 @@ namespace Engine {
             meshes.push_back(Mesh(verts, indices, textures));
         }
 
+
         void loadTextures() {
             for (int i = 0; i < textureImageNames.size(); i++) {
                 char name[9];
@@ -89,16 +90,27 @@ namespace Engine {
             model = glm::scale(model, glm::vec3(textures[0].getWidth(), textures[0].getHeight(), 1.0f) * size);
             //model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
             shader.setMat4("model", model);
-            for (int i = 0; i < 4; i++) {
+            /*for (int i = 0; i < 4; i++) {
                 glm::vec3 localPos = glm::vec3(vertices[i * 8 + 0], vertices[i * 8 + 1], vertices[i * 8 + 2]);
                 glm::vec4 worldPos = model * glm::vec4(localPos, 1.0f);
                 worldVerts[i] = glm::vec3(worldPos);
-                //std::cout << "Vertex " << i << " world position: (" << worldPos.x << ", " << worldPos.y << ", " << worldPos.z << ")" << std::endl;
-            }
+                std::cout << "Vertex " << i << " world position: (" << worldPos.x << ", " << worldPos.y  << std::endl;
+            }*/
             Model::render(shader);
         }
 
         void render(Shader shader, glm::vec3 pos, float rot) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, pos);
+            model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::scale(model, glm::vec3(textures[0].getWidth(), textures[0].getHeight(), 1.0f) * size);
+            //std::cout << "width " << textures[0].getWidth() << " Hiehgt " << textures[0].getHeight() << std::endl;
+            //model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
+            shader.setMat4("model", model);
+            Model::render(shader);
+        }
+
+        void render(Shader shader, glm::vec3 pos, glm::vec3 size, float rot) {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, pos);
             model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -118,6 +130,19 @@ namespace Engine {
             for (int i = 0; i < 4; i++) {
                 glm::vec3 localPos(vertices[i * 8 + 0], vertices[i * 8 + 1], vertices[i * 8 + 2]);
                 worldVerts[i] = glm::vec3(model * glm::vec4(localPos, 1.0f));
+            }
+        }
+
+        void UpdateWorldVerts(glm::vec3 pos, glm::vec3 size, float rot) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, pos);
+            model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::scale(model, glm::vec3(textures[0].getWidth(), textures[0].getHeight(), 1.0f) * size);
+            for (int i = 0; i < 4; i++) {
+                glm::vec3 localPos = glm::vec3(vertices[i * 8 + 0], vertices[i * 8 + 1], vertices[i * 8 + 2]);
+                glm::vec4 worldPos = model * glm::vec4(localPos, 1.0f);
+                worldVerts[i] = glm::vec3(worldPos);
+                std::cout << "Vertex " << i << " world position: (" << worldVerts[i].x << ", " << worldVerts[i].y << ")" << std::endl;
             }
         }
     };

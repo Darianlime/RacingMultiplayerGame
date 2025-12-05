@@ -131,17 +131,23 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Models\Rectangle.cpp" />
     <ClCompile Include="src\Models\Tile.cpp" />
     <ClCompile Include="src\Models\WorldMap.cpp" />
     <ClCompile Include="src\Physics\Collision2D.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Physics\QuadTree.cpp" />
+    <ClCompile Include="src\Physics\UniformGridPartition.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Models\Quad.hpp" />
+    <ClInclude Include="src\Models\Rectangle.hpp" />
     <ClInclude Include="src\Models\Tile.h" />
     <ClInclude Include="src\Models\WorldMap.h" />
     <ClInclude Include="src\Network\Packets.h" />
     <ClInclude Include="src\Physics\Collision2D.h" />
+    <ClInclude Include="src\Physics\QuadTree.h" />
+    <ClInclude Include="src\Physics\UniformGridPartition.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

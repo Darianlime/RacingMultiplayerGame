@@ -5,7 +5,7 @@ Collision2D::Collision2D() {
 
 }
 
-bool Collision2D::checkOBBCollision(Quad& q1, Quad& q2) {
+bool Collision2D::CheckOBBCollision(Quad& q1, Quad& q2) {
 	Quad* quad1 = &q1;
 	Quad* quad2 = &q2;
 
@@ -40,7 +40,7 @@ bool Collision2D::checkOBBCollision(Quad& q1, Quad& q2) {
 	return true;
 }
 
-bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2, float fixedDeltaTime) {
+bool Collision2D::CheckOBBCollisionResolve(Quad& q1, Quad& q2) {
 	Quad* quad1 = &q1;
 	Quad* quad2 = &q2;
 
@@ -98,5 +98,11 @@ bool Collision2D::checkOBBCollisionResolve(Quad& q1, Quad& q2, float fixedDeltaT
 		q2.pos += glm::vec3(correction * 0.5f, 0.0f);
 	}
 	return true;
+}
+
+bool Collision2D::CheckAABBCollsion(Quad& q1, Quad& q2) {
+	bool x = q1.size.x + q1.pos.x >= q2.pos.x && q2.size.x + q2.pos.x >= q1.pos.x;
+	bool y = q1.size.y + q1.pos.y >= q2.pos.y && q2.size.y + q2.pos.y >= q1.pos.y;
+	return x && y;
 }
 

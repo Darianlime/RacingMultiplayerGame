@@ -9,17 +9,23 @@ namespace Engine {
 		this->map = map;
 		this->row = row;
 		this->column = column;
+		int offsetX = 1;
+		int offsetY = 1;
 		for (int i = 0; i < row; i++) {
 			for (int j = 0; j < column; j++) {
 				int index = i * column + j;
 				TileProperties& prop = tileData.at(map[index]);
-				glm::vec3 size = glm::vec3(11.0f, 11.0f, 0.0f);
 				std::vector<const char*> textureNames = { prop.tileName };
-				float x = j * 64.0f * size.x;
-				float y = i * 64.0f * size.y;
-				tiles.push_back(Quad(glm::vec3(x, -y, 0.0f), size, prop.rotation, textureNames, STATIC));
+				glm::vec3 size(11.0f, 11.0f, 0.0f);
+				float x = (j + offsetX) * (64.0f * size.x / 2);
+				float y = (i + offsetY) * -(64.0f * size.y / 2);
+				tiles.push_back(Quad(glm::vec3(x, y, 0.0f), size, prop.rotation, textureNames, STATIC));
+				offsetX += 1;
 				tiles[index].initQuads();
+				tiles[index].UpdateWorldVerts(tiles[index].pos, size, prop.rotation);
 			}
+			offsetX = 1;
+			offsetY += 1;
 		}
 	}
 

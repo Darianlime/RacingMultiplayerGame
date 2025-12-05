@@ -11,8 +11,9 @@ private:
 public:
 	Collision2D();
 
-	static bool checkOBBCollision(Quad& q1, Quad& q2);
-	static bool checkOBBCollisionResolve(Quad& q1, Quad& q2, float fixedDeltaTime);
+	static bool CheckOBBCollision(Quad& q1, Quad& q2);
+	static bool CheckOBBCollisionResolve(Quad& q1, Quad& q2);
+	static bool CheckAABBCollsion(Quad& q1, Quad& q2);
 };
 
 #endif // !COLLISION2D_H
