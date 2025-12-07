@@ -1,8 +1,6 @@
 #include <iostream>
-#include <enet\enet.h>
 #include <string>
 #include <cstring>
-#include <map>
 
 #include <ctime>
 #include <ratio>
@@ -13,16 +11,17 @@
 #include <deque>
 #include <limits>
 
-#include "Physics/Collision2D.h"
+#include "Core/Physics/Collision2D.h"
+#include "Core/Physics/UniformGridPartition.h"
+#include "Core/Physics/QuadTree.h"
+#include "Core/Physics/Quad.h"
 
-#include "Models/WorldMap.h"
-#include "Models/Quad.hpp"
+#include "Server/Network/Packets.h"
+#include "Server/WorldMap.h"
 
-#include "Network/Packets.h"
-#include "Physics/QuadTree.h"
-#include "Physics/UniformGridPartition.h"
-
-using namespace NetworkServer;
+using namespace Server;
+using namespace Server::Network;
+using namespace Core;
 using namespace std::chrono;
 using namespace std::this_thread;
 
@@ -31,53 +30,11 @@ constexpr uint8_t HISTORY_SIZE = 200;
 
 uint64_t currentServerTick = 0;
 
-typedef enum {
-	W, S, A, D, SPACE
-} KeyInput;
-
-struct Car {
-	Quad transform;
-	Quad transformQuery;
-	std::vector<uint16_t> queryIndex;
-	float velocity;
-	float accel;
-	float minSpeed;
-	float maxSpeed;
-	float currentAngle;
-	float forwardRot;
-	bool collided;
-
-	std::string assetImage;
-
-	Car() : 
-		transform(DYNAMIC),
-		transformQuery(glm::vec3(0.0f,0.0f,0.0f), glm::vec3(704.0f,704.0f,1.0f), 0.0f, STATIC),
-		queryIndex(transformQuery.noVertices, 0),
-		velocity(0.0f),
-		accel(0.0f),
-		minSpeed(-800.0f),
-		maxSpeed(2700.0f),
-		currentAngle(90.0f),
-		forwardRot(0.0f),
-		assetImage(""),
-		collided(false) { }
-
-	glm::vec3 GetForwardDirection() {
-		float angleRad = glm::radians(currentAngle);
-		return glm::normalize(glm::vec3(glm::sin(angleRad), glm::cos(angleRad), 0.0f));
-	}
-
-	Quad& GetTransform() { return transform; }
-	Quad& GetTransformQuery() { return transformQuery; }
-	std::vector<uint16_t>& GetQueryIndex() { return queryIndex; }
-	uint16_t& GetQueryIndexValue(uint8_t index) { return queryIndex[index]; }
-};
-
 class ClientData {
 private:
 	uint8_t m_id;
 	std::string username;
-	std::unique_ptr<Car> car;
+	std::unique_ptr<CarPhysics> car;
 public:
 	bool ready = false;
 	std::map<uint64_t, InputState> inputStateHistory;
@@ -87,9 +44,9 @@ public:
 	ClientData(uint8_t id) : m_id(id) {}
 
 	void SetUsername(std::string name) { username = name; }
-	void CreateCar() { car = std::make_unique<Car>(); }
+	void CreateCar() { car = std::make_unique<CarPhysics>(); }
 
-	Car* GetCar() const { return car.get(); }
+	CarPhysics* GetCar() const { return car.get(); }
 	InputState& GetInputState(uint32_t index) { return inputStateHistory[index]; }
 	StateHistoryPacket& GetStateHistory(uint32_t index) { return statePacketHistory[index % HISTORY_SIZE]; }
 	void SetStateHistory(StateHistoryPacket packet, uint32_t index) { statePacketHistory[index % HISTORY_SIZE] = packet; }
@@ -138,7 +95,7 @@ void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, char* data) {
 		BroadcastPacket(server, ChannelFlag::CHANNEL_RELIABLE, packet);
 
 		for (auto const& [other_id, client] : client_map) {
-			Car* car = client->GetCar();
+			CarPhysics* car = client->GetCar();
 			if (!car || other_id == id) continue;
 			CarPacketImage packet = { PacketType::CAR_PACKET, 0, 2, other_id, car->GetTransform().pos, car->GetTransform().rot, car->currentAngle, car->velocity, car->forwardRot, ""};
 			strcpy_s(packet.assetImage, sizeof(packet.assetImage), car->assetImage.c_str());
@@ -157,8 +114,8 @@ void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, InputPacket* data) 
 		InputState input = data->inputs;
 		//std::cout << "inital " << input.W << input.S << input.A << input.D << std::endl;
 		//std::cout << "inputtick " << input.currentTick << "currentServerTick: " << currentServerTick << std::endl;
-		if (input.currentTick > currentServerTick) {
-			client_map[id]->inputStateHistory[input.currentTick] = input;
+		if (input.tick > currentServerTick) {
+			client_map[id]->inputStateHistory[input.tick] = input;
 		}
 		break;
 	}
@@ -166,58 +123,18 @@ void ParseData(ENetHost* server, ENetPeer* peer, uint8_t id, InputPacket* data) 
 
 void PhysicsUpdate(double fixedDeltaTime) {
 	for (auto& [id, client] : client_map) {
-		Car* car = client->GetCar();
+		CarPhysics* car = client->GetCar();
 		if (car != nullptr) {
 			InputState inputState;
 			if (client_map[id]->inputStateHistory.count(currentServerTick) < 1) {
-				inputState = client_map[id]->inputStateHistory[client->lastKnownInput.currentTick];
+				inputState = client_map[id]->inputStateHistory[client->lastKnownInput.tick];
 			}
 			else {
 				inputState = client_map[id]->inputStateHistory[currentServerTick];
 			}
 			//std::cout << "id " << static_cast<int>(id) << std::endl;
 			//std::cout << "inital " << inputState.W << inputState.S << inputState.A << inputState.D << std::endl;
-			if (inputState.W) {
-				car->accel = car->maxSpeed;
-			}
-			else if (inputState.S) {
-				car->accel = -2700.0f;
-			}
-			else {
-				car->accel = 0.0;
-			}
-			car->velocity += car->accel * fixedDeltaTime;
-			float drag = 500.0f + 0.3f * glm::abs(car->velocity);
-			if (car->velocity > 0.0f)
-				car->velocity -= drag * fixedDeltaTime;
-			else if (car->velocity < 0.0f)
-				car->velocity += drag * fixedDeltaTime;
-			car->velocity = glm::clamp(car->velocity, -2700.0f, car->maxSpeed);
-
-			float turnRate = 100.0f;
-			float calcRot = glm::sign(car->velocity) * turnRate * (float)fixedDeltaTime;
-
-			if (inputState.D && glm::abs(car->velocity) > 100.0f) {
-				car->GetTransform().rot -= calcRot;
-				car->forwardRot -= calcRot;
-			}
-			if (inputState.A && glm::abs(car->velocity) > 100.0f) {
-				car->GetTransform().rot += calcRot;
-				car->forwardRot += calcRot;
-			}
-			if (inputState.Space && (!((inputState.Space && inputState.D)) || !((inputState.Space && inputState.A)))) {
-				car->velocity -= 100.0f * float(fixedDeltaTime);
-				if (car->velocity < 0.0f) car->velocity = 0.0f;
-			}
-
-			glm::vec3 forward = car->GetForwardDirection();
-			forward = glm::normalize(forward);
-			car->GetTransform().pos += forward * car->velocity * (float)fixedDeltaTime;
-			car->currentAngle = -car->forwardRot;
-			car->GetTransformQuery().pos = car->GetTransform().pos;
-			car->GetTransformQuery().calculateWorldVerts(glm::vec3(1.0f), 0.0f);
-			car->GetTransform().calculateWorldVerts(glm::vec3(444.0f, 208.0f, 1.0f), -90.0f);
-
+			car->Update(inputState, fixedDeltaTime);
 		}
 	}
 }
@@ -291,21 +208,7 @@ int main(int argc, char** argv) {
 				float size = (64.0f * 11.0f * map.GetRow());
 				Quad mapQuad(glm::vec3(size / 2.0f, -size / 2.0f, 0.0f), glm::vec3(size, size, 1.0f), 0.0f, PhysicsType::STATIC);
 				std::cout << mapQuad.size.x << " + " << mapQuad.size.y << std::endl;
-				mapQuad.calculateWorldVerts(mapQuad.pos, glm::vec3(1.0f), 0.0f);
-				/*for (int i = 0; i < mapQuad.noVertices; i++) {
-					std::cout << mapQuad.worldVerts[i].x << " + " << mapQuad.worldVerts[i].y << std::endl;
-				}*/
-				//QuadTree quadTree(mapQuad, 3);
-				//srand(time(NULL));
-				//for (int i = 1; i < 50; i++) {
-				//	int x = (rand() % int(size)) + 1;
-				//	int y = (rand() % int(size)) + 1;
-				//	std::cout << "x: " << x << ", y: " << -y << std::endl;
-				//	quadTree.Insert(glm::vec3(x, -y, 0.0f));
-				//	x = floor(x / (64.0f * 11.0f));
-				//	y = floor(y / (64.0f * 11.0f));
-				//	//uniPartition.Insert(x + map.GetColumn() * y, i);
-				//}
+				mapQuad.CalculateWorldVerts(mapQuad.pos, glm::vec3(1.0f), 0.0f);
 
 				std::vector<uint8_t> buffer;
 				buffer.reserve(sizeof(PacketHeader) + 2 + mapSize);
@@ -374,7 +277,7 @@ int main(int argc, char** argv) {
 			PhysicsUpdate(FIXED_HERTZ);
 
 			for (auto& [id, client] : client_map) {
-				Car* car = client->GetCar();
+				CarPhysics* car = client->GetCar();
 				if (!car) {
 					continue;
 				}
@@ -382,47 +285,34 @@ int main(int argc, char** argv) {
 					glm::vec3 vertsQ = car->GetTransformQuery().worldVerts[i];
 					uniPartition.Insert(vertsQ.x, vertsQ.y, id, car->GetQueryIndexValue(i));
 				}
-				//int i = 0;
-				//for (uint8_t id : car->queryIndex) {
-				//	/*if (id.empty()) { i++; continue; };*/
-				//	std::cout << i << " " << static_cast<unsigned int>(id) << std::endl;
-				//	i++;
-				//}
 			}
 
 			for (auto& [id, client] : client_map) {
-				Car* car1 = client->GetCar();
+				CarPhysics* car1 = client->GetCar();
 				if (!car1) continue;
-				int i = 0;
-				for (uint16_t tileIndex : car1->queryIndex) {
+				for (uint16_t tileIndex : car1->GetQueryIndex()) {
 					if (tileIndex == std::numeric_limits<uint16_t>::max()) continue;
 					uint32_t poolStartIndex = uniPartition.GetPoolStart(tileIndex);
-					//std::cout << static_cast<unsigned int>(id) << " " << i << " " << static_cast<unsigned int>(poolStartIndex) << std::endl;
 					for (uint16_t i = 0; i < uniPartition.tileCount[tileIndex]; i++) {
 						uint8_t id2 = uniPartition.pool[poolStartIndex + i];
 						if (id == id2) {
 							continue;
 						}
-						Car* car2 = client_map[id2]->GetCar();
+						CarPhysics* car2 = client_map[id2]->GetCar();
 						if (car1 != nullptr && car2 != nullptr) {
-							//std::cout << static_cast<unsigned int>(id) << " " << static_cast<unsigned int>(id2) << std::endl;
-							bool co = !Collision2D::CheckAABBCollsion(car1->GetTransformQuery(), car2->GetTransformQuery());
-							if (co) {
-								std::cout << co << std::endl;
+							if (!Collision2D::CheckAABBCollsion(car1->GetTransformQuery(), car2->GetTransformQuery())) {
 								continue;
 							}
-							std::cout << co << std::endl;
 							bool collision1 = Collision2D::CheckOBBCollisionResolve(car1->GetTransform(), car2->GetTransform());
 							if (collision1) {
-								car1->GetTransformQuery().calculateWorldVerts(glm::vec3(1.0f), 0.0f);
-								car1->GetTransform().calculateWorldVerts(glm::vec3(444.0f, 208.0f, 1.0f), -90.0f);
-								car2->GetTransformQuery().calculateWorldVerts(glm::vec3(1.0f), 0.0f);
-								car2->GetTransform().calculateWorldVerts(glm::vec3(444.0f, 208.0f, 1.0f), -90.0f);
+								car1->GetTransformQuery().CalculateWorldVerts(glm::vec3(1.0f), 0.0f);
+								car1->GetTransform().CalculateWorldVerts(glm::vec3(444.0f, 208.0f, 1.0f), -90.0f);
+								car2->GetTransformQuery().CalculateWorldVerts(glm::vec3(1.0f), 0.0f);
+								car2->GetTransform().CalculateWorldVerts(glm::vec3(444.0f, 208.0f, 1.0f), -90.0f);
 							}
 							car1->collided = collision1;
 						}
 					}
-					i++;
 				}
 			}
 
@@ -432,7 +322,7 @@ int main(int argc, char** argv) {
 			for (auto const& [id, client] : client_map) {
 				if (!client->ready) continue;
 
-				Car* car = client->GetCar();
+				CarPhysics* car = client->GetCar();
 				if (!car) {
 					continue;
 				}

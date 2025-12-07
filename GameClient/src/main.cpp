@@ -1,41 +1,38 @@
 ﻿#include <iostream>
 #include <stdio.h>
-#include <enet/enet.h>
 #include <string>
 #include <cstring>
-#include <map>
 #include <algorithm>
-#include <queue>
 #include <atomic>
-#include <memory>
 #include <cstdint>
 #include <chrono>
 #include <thread>
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "io/Screen.h"
-#include "io/Keyboard.h"
-#include "io/Joystick.h"
-#include "io/Mouse.h"
-#include "io/Camera2D.h"
-#include "io/InputManager.h"
+#include "Core/io/InputManager.h"
+#include "Core/Threads/ThreadSafeQueue.h"
+#include "Core/Physics/Collision2D.h"
+#include "Core/Physics/CarPhysics.h"
 
-#include "graphics/models/CarRenderer.h"
-#include "graphics/Shader.h"
-#include "graphics/models/Quad.hpp"
-#include "graphics/Text.h"
-#include "graphics/models/RaceTrackRender.h"
+#include "Client/io/Screen.h"
+#include "Client/io/Keyboard.h"
+#include "Client/io/Joystick.h"
+#include "Client/io/Mouse.h"
+#include "Client/io/Camera2D.h"
 
-#include "Network/Packets.h"
+#include "Client/graphics/models/CarRenderer.h"
+#include "Client/graphics/Shader.h"
+#include "Client/graphics/models/QuadRender.h"
+#include "Client/graphics/Text.h"
+#include "Client/graphics/models/RaceTrackRender.h"
 
-#include "Threads/ThreadSafeQueue.h"
+#include "Client/Network/Packets.h"
 
-using namespace NetworkClient;
-using namespace Engine;
+using namespace Client;
+using namespace Client::Network;
+using namespace Core;
 using namespace std::chrono;
 using namespace std::this_thread;
 
@@ -162,10 +159,11 @@ void ParseCarData(CarPacketImage* data, double fixedDeltaTime) {
 void NetWorkDataThread(ENetHost* client, ENetPeer* peer, const char* username) {
 	while (IsNetworkThreadRunning) {
 		ENetEvent event;
-		while (enet_host_service(client, &event, 1) > 0) {
+		while (enet_host_service(client, &event, 10) > 0) {
 			switch (event.type) {
 			case ENET_EVENT_TYPE_RECEIVE:
 			{
+				if (!peer || peer->state != ENET_PEER_STATE_CONNECTED) break;
 				PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 				uint8_t type = reinterpret_cast<PacketHeader*>(event.packet->data)->packetType;
 				if (client_map.find(CLIENT_ID) != client_map.end()) {
@@ -226,7 +224,7 @@ void NetWorkDataThread(ENetHost* client, ENetPeer* peer, const char* username) {
 			}
 			}
 		}
-		sleep_for(std::chrono::microseconds(200));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
@@ -320,7 +318,7 @@ int main(int argc, char **argv) {
 				clientData->currentTick++;
 
 				//std::cout << "tick: " << clientData->currentTick << std::endl;
-				if (Keyboard::key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
+				if (Keyboard::Key(GLFW_KEY_ESCAPE) || mainJ.buttonState(GLFW_JOYSTICK_BTN_RIGHT)) {
 					printf("in escape\n");
 					screen.setShouldClose(true);
 				}
@@ -379,8 +377,8 @@ int main(int argc, char **argv) {
 						for (uint64_t i = serverTick + 1; i < clientDataRec->currentTick; ++i) {
 							if (!clientData->colliding) {
 								InputState inputState = clientDataRec->GetInputs()->GetInputStateHistory(i);
-								predictionCarState = car1->SimulatePhysicsUpdate(predictionCarState, inputState, PREDICTION_FIXED_HERTZ);
-								car1->GetTransform().UpdateWorldVerts(predictionCarState);
+								predictionCarState = CarPhysics::SimulatePhysicsUpdate(predictionCarState, inputState, PREDICTION_FIXED_HERTZ);
+								car1->GetTransform().GetQuad().CalculateWorldVerts(predictionCarState.pos, glm::vec3(1.0f), predictionCarState.rot);
 							}
 							bool collided = false;
 							glm::vec2 normal{};
@@ -393,18 +391,18 @@ int main(int argc, char **argv) {
 								}
 								CarRenderer* car2 = client2->GetCar();
 								if (car1 != nullptr && car2 != nullptr) {
-									car1->GetTransform().UpdateWorldVerts(predictionCarState);
-									car2->GetTransform().UpdateWorldVerts(client2->serverCarState);
-									CollisionResult res = Collision2D::checkOBBCollisionResolve(car1->GetTransform(), predictionCarState, car2->GetTransform(), client2->serverCarState, PREDICTION_FIXED_HERTZ);
+									car1->GetTransform().GetQuad().CalculateWorldVerts(predictionCarState.pos, glm::vec3(1.0f), predictionCarState.rot);
+									car2->GetTransform().GetQuad().CalculateWorldVerts(client2->serverCarState.pos, glm::vec3(1.0f), client2->serverCarState.rot);
+
+									CollisionResult res = Collision2D::CheckOBBCollisionResolve(car1->GetTransform().GetQuad(), predictionCarState, car2->GetTransform().GetQuad(), client2->serverCarState);
 									if (res.isCollided) {
 										float percent = 0.6f;
 										float correctionAmount = std::max(res.overlap - slop, 0.0f) * percent;
 										predictionCarState.pos -= glm::vec3(res.normal * correctionAmount, 0.0f);
 										clientDataRec->colliding = true;
 									}
-									car2->GetTransform().UpdateWorldVerts(client2->serverCarState);
-									car1->GetTransform().UpdateWorldVerts(predictionCarState);
-
+									car2->GetTransform().GetQuad().CalculateWorldVerts(client2->serverCarState.pos, glm::vec3(1.0f), client2->serverCarState.rot);
+									car1->GetTransform().GetQuad().CalculateWorldVerts(predictionCarState.pos, glm::vec3(1.0f), predictionCarState.rot);
 								}
 							}
 						}
@@ -414,7 +412,7 @@ int main(int argc, char **argv) {
 					else { // other client snapshots to interpolate 
 						clientDataRec->stateSnapShots[serverTick] = data->carState;
 						clientDataRec->serverCarState = data->carState;
-						clientDataRec->GetCar()->GetTransform().UpdateWorldVerts(data->carState);
+						clientDataRec->GetCar()->GetTransform().GetQuad().CalculateWorldVerts(data->carState.pos, glm::vec3(1.0f), data->carState.rot);
 						if (clientDataRec->stateSnapShots.size() > HISTORY_SNAPSHOTS) {
 							clientDataRec->stateSnapShots.erase(clientDataRec->stateSnapShots.begin());
 						}
@@ -424,12 +422,14 @@ int main(int argc, char **argv) {
 				}
 
 				// Process input and updates to input history
-				InputState& inputs = clientData->GetInputs()->processInputs(clientData->currentTick);
+				//std::cout << static_cast<unsigned int>(input) << std::endl;
+				InputState& inputs = clientData->GetInputs()->ProcessInputs(Keyboard::ProccessInputs(), clientData->currentTick);
+				std::cout << "inital " << inputs.W << inputs.S << inputs.A << inputs.D << std::endl;
 
 				// Proccess Prediction Update 
 				if (!clientData->colliding) {
-					clientData->predictedCarState = clientData->GetCar()->SimulatePhysicsUpdate(clientData->predictedCarState, inputs, PREDICTION_FIXED_HERTZ);
-					clientData->GetCar()->GetTransform().UpdateWorldVerts(clientData->predictedCarState);
+					clientData->predictedCarState = CarPhysics::SimulatePhysicsUpdate(clientData->predictedCarState, inputs, PREDICTION_FIXED_HERTZ);
+					clientData->GetCar()->GetTransform().GetQuad().CalculateWorldVerts(clientData->predictedCarState.pos, glm::vec3(1.0f), clientData->predictedCarState.rot);
 				}
 				//std::cout << "inital " << inputs.W << inputs.S << inputs.A << inputs.D << std::endl;
 				InputPacket inputPacket = { 
@@ -525,7 +525,7 @@ int main(int argc, char **argv) {
 					}
 
 					client->serverCarState = interpolateCar;
-					client->GetCar()->GetTransform().UpdateWorldVerts(interpolateCar);
+					client->GetCar()->GetTransform().GetQuad().CalculateWorldVerts(interpolateCar.pos, glm::vec3(1.0f), interpolateCar.rot);
 					//std::cout << "other client x: " << interpolateCar.pos.x << " y: " << interpolateCar.pos.y << std::endl;
 					client->GetCar()->Render(objectShader, interpolateCar.pos, interpolateCar.rot - 90.0f);
 				}
